@@ -1,0 +1,65 @@
+version: '3.8'
+
+services:
+  app:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      # API Keys (set these in .env file)
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - ELEVENLABS_API_KEY=${ELEVENLABS_API_KEY}
+      - HONCHO_API_KEY=${HONCHO_API_KEY}
+      
+      # Configuration
+      - LLM_MODEL=${LLM_MODEL:-gpt-4-turbo-preview}
+      - VOICE_ID=${VOICE_ID:-21m00Tcm4TlvDq8ikWAM}
+      - HONCHO_BASE_URL=${HONCHO_BASE_URL:-https://api.honcho.dev}
+      - HONCHO_APP_ID=${HONCHO_APP_ID:-literature-companion}
+      
+      # Server settings
+      - HOST=0.0.0.0
+      - PORT=8000
+      - RELOAD=false
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    
+    volumes:
+      # Persist uploaded books and processed data
+      - ./uploads:/app/uploads
+      - ./processed:/app/processed
+      - ./voice_cache:/app/voice_cache
+      - ./logs:/app/logs
+    
+    restart: unless-stopped
+    
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Optional: Add Redis for caching (future enhancement)
+  # redis:
+  #   image: redis:alpine
+  #   ports:
+  #     - "6379:6379"
+  #   volumes:
+  #     - redis_data:/data
+
+  # Optional: Add PostgreSQL for persistent storage (future enhancement)
+  # postgres:
+  #   image: postgres:15
+  #   environment:
+  #     - POSTGRES_DB=literature_companion
+  #     - POSTGRES_USER=companion
+  #     - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+  #   ports:
+  #     - "5432:5432"
+  #   volumes:
+  #     - postgres_data:/var/lib/postgresql/data
+
+volumes:
+  # redis_data:
+  # postgres_data:

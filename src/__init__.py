@@ -1,0 +1,1 @@
+# Virtual Literature Companion - Main Package
