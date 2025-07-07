@@ -1,7 +1,100 @@
-[project]
+[tool.poetry]
 name = "virtual-literature-companion"
 version = "0.1.0"
-description = "Add your description here"
+description = "An AI-driven literature companion that creates emotionally expressive discussions through multimedia"
+authors = ["Wild Genius Labs"]
+license = "MIT"
 readme = "README.md"
-requires-python = ">=3.11"
-dependencies = []
+packages = [
+    { include = "wild_genius_prof" },
+    { include = "processors" },
+    { include = "generation" },
+    { include = "api" }
+]
+
+[tool.poetry.dependencies]
+python = "^3.11"
+python-dotenv = "^1.0.0"
+pydantic = "^2.5.3"
+pydantic-settings = "^2.1.0"
+langchain = "^0.1.0"
+langchain-core = "^0.1.0"
+langchain-openai = "^0.0.2"
+langchain-anthropic = "^0.0.1"
+langgraph = "^0.0.20"
+honcho-ai = "^0.0.8"
+fastapi = "^0.109.0"
+uvicorn = { extras = ["standard"], version = "^0.27.0" }
+websockets = "^12.0"
+python-multipart = "^0.0.6"
+pypdf = "^3.17.4"
+tiktoken = "^0.5.2"
+numpy = "^1.26.3"
+scikit-learn = "^1.4.0"
+chromadb = "^0.4.22"
+openai = "^1.8.0"
+elevenlabs = "^0.2.27"
+pydub = "^0.25.1"
+soundfile = "^0.12.1"
+librosa = "^0.10.1"
+loguru = "^0.7.2"
+sentry-sdk = "^1.39.2"
+aiohttp = "^3.9.1"
+aiofiles = "^23.2.1"
+python-decouple = "^3.8"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^7.4.4"
+pytest-asyncio = "^0.23.3"
+pytest-cov = "^4.1.0"
+black = "^23.12.1"
+flake8 = "^7.0.0"
+mypy = "^1.8.0"
+pre-commit = "^3.6.0"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.black]
+line-length = 88
+target-version = ['py311']
+include = '\.pyi?$'
+extend-exclude = '''
+/(
+  # Directories
+  \.git
+  | \.venv
+  | build
+  | dist
+)/
+'''
+
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+minversion = "7.0"
+addopts = "-ra -q --strict-markers"
+testpaths = ["tests"]
+python_files = "test_*.py"
+python_classes = "Test*"
+python_functions = "test_*"
+
+[tool.coverage.run]
+source = ["wild_genius_prof", "processors", "generation", "api"]
+omit = ["*/tests/*", "*/__pycache__/*"]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+]
