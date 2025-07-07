@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Virtual Literature Companion</title>
+    <link rel="stylesheet" href="/static/css/main.css">
+    <link rel="stylesheet" href="/static/css/gestures.css">
+    <link href="https://fonts.googleapis.com/css2?family=Crimson+Text:ital,wght@0,400;0,600;1,400&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div id="app" class="app-container">
+        <!-- Initial Setup Screen -->
+        <div id="setup-screen" class="setup-screen active">
+            <div class="setup-content">
+                <h1 class="setup-title">Virtual Literature Companion</h1>
+                <p class="setup-subtitle">An AI-powered companion for deeper literary understanding</p>
+                
+                <div class="book-upload-section">
+                    <h2>Begin Your Journey</h2>
+                    <div class="book-info-form">
+                        <input type="text" id="book-title" placeholder="Book Title" class="book-input" value="The Brothers Karamazov">
+                        <input type="text" id="book-author" placeholder="Author" class="book-input" value="Fyodor Dostoevsky">
+                        <div class="file-upload-wrapper">
+                            <label for="book-file" class="file-upload-label">
+                                <span class="upload-icon">📚</span>
+                                <span class="upload-text">Upload Book Text File</span>
+                            </label>
+                            <input type="file" id="book-file" accept=".txt,.epub" class="file-input">
+                        </div>
+                        <button id="start-session" class="start-button">Begin Reading Session</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Chat Interface -->
+        <div id="chat-interface" class="chat-interface">
+            <div class="chat-header">
+                <div class="book-info">
+                    <h2 id="current-book-title" class="book-title"></h2>
+                    <p id="current-book-author" class="book-author"></p>
+                </div>
+                <div class="reading-progress">
+                    <span id="current-location" class="location-display">Not started</span>
+                </div>
+            </div>
+
+            <div id="conversation-container" class="conversation-container">
+                <div id="messages" class="messages"></div>
+            </div>
+
+            <div class="input-container">
+                <div class="typing-indicator" id="typing-indicator">
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                </div>
+                <div class="input-wrapper">
+                    <textarea 
+                        id="message-input" 
+                        class="message-input" 
+                        placeholder="Share your thoughts or update your reading progress..."
+                        rows="1"
+                    ></textarea>
+                    <button id="send-button" class="send-button">
+                        <svg viewBox="0 0 24 24" width="24" height="24">
+                            <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" fill="currentColor"/>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Table of Contents Sidebar -->
+        <div id="toc-sidebar" class="toc-sidebar">
+            <h3 class="toc-title">Table of Contents</h3>
+            <div id="toc-content" class="toc-content"></div>
+        </div>
+    </div>
+
+    <!-- Audio elements for gesture sounds -->
+    <audio id="audio-lean-in" preload="auto">
+        <source src="/static/audio/lean-in.mp3" type="audio/mpeg">
+    </audio>
+    <audio id="audio-pull-back" preload="auto">
+        <source src="/static/audio/pull-back.mp3" type="audio/mpeg">
+    </audio>
+    <audio id="audio-tremble" preload="auto">
+        <source src="/static/audio/tremble.mp3" type="audio/mpeg">
+    </audio>
+    <audio id="audio-illuminate" preload="auto">
+        <source src="/static/audio/illuminate.mp3" type="audio/mpeg">
+    </audio>
+    <audio id="audio-fragment" preload="auto">
+        <source src="/static/audio/fragment.mp3" type="audio/mpeg">
+    </audio>
+    <audio id="audio-whisper" preload="auto">
+        <source src="/static/audio/whisper.mp3" type="audio/mpeg">
+    </audio>
+    <audio id="audio-grip" preload="auto">
+        <source src="/static/audio/grip.mp3" type="audio/mpeg">
+    </audio>
+    <audio id="audio-shatter" preload="auto">
+        <source src="/static/audio/shatter.mp3" type="audio/mpeg">
+    </audio>
+    <audio id="audio-breathe" preload="auto">
+        <source src="/static/audio/breathe.mp3" type="audio/mpeg">
+    </audio>
+    <audio id="audio-reach" preload="auto">
+        <source src="/static/audio/reach.mp3" type="audio/mpeg">
+    </audio>
+    <audio id="audio-dance" preload="auto">
+        <source src="/static/audio/dance.mp3" type="audio/mpeg">
+    </audio>
+
+    <script src="/static/js/gestures.js"></script>
+    <script src="/static/js/main.js"></script>
+</body>
+</html>
