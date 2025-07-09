@@ -1,7 +1,22 @@
 [project]
 name = "virtual-literature-companion"
 version = "0.1.0"
-description = "Add your description here"
+description = "Advanced PDF book processing and analysis system with AI-powered literary analysis"
 readme = "README.md"
 requires-python = ">=3.11"
-dependencies = []
+dependencies = [
+    "beautifulsoup4>=4.13.4",
+    "chromadb>=1.0.15",
+    "click>=8.2.1",
+    "lxml>=6.0.0",
+    "openai>=1.93.3",
+    "pdfplumber>=0.11.7",
+    "pillow>=11.3.0",
+    "pymupdf>=1.24.14",
+    "pytesseract>=0.3.13",
+    "requests>=2.32.4",
+    "sentence-transformers>=5.0.0",
+]
+
+[project.scripts]
+vlc = "virtual_literature_companion.cli:cli"
