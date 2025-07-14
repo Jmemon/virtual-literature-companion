@@ -85,6 +85,9 @@ def ingest_book_pdf(
     """
     logger.info(f"Starting book ingestion for '{novel_name}' by {author_name}")
     logger.info(f"PDF source: {pdf_path}")
+
+    novel_name = novel_name.lower().replace(" ", "_")
+    author_name = author_name.lower().replace(" ", "_")
     
     # Validate inputs
     validation_result = _validate_inputs(pdf_path, novel_name, author_name)
@@ -202,7 +205,7 @@ def ingest_book_pdf(
             },
             "output_files": {
                 "book_directory": str(book_dir),
-                "raw_chapters": str(book_dir / "raw_chapters"),
+                "raw": str(book_dir / "raw"),
                 "structured_data": str(book_dir / "structured"),
                 "vector_indexes": str(book_dir / "indexes"),
                 "metadata": str(book_dir / "metadata.json")
@@ -331,7 +334,7 @@ def _check_existing_processing(book_dir: Path) -> bool:
     
     # Check for required directories and files
     required_paths = [
-        book_dir / "raw_chapters",
+        book_dir / "raw",
         book_dir / "structured",
         book_dir / "indexes",
         book_dir / "metadata.json"
@@ -353,10 +356,10 @@ def _validate_complete_processing(book_dir: Path) -> Dict[str, Any]:
     files_created = {}
     
     # Check raw chapters
-    raw_chapters_dir = book_dir / "raw_chapters"
-    if raw_chapters_dir.exists():
-        chapter_files = list(raw_chapters_dir.glob("*.txt"))
-        files_created["raw_chapters"] = len(chapter_files)
+    raw_dir = book_dir / "raw"
+    if raw_dir.exists():
+        chapter_files = list(raw_dir.glob("*.txt"))
+        files_created["raw"] = len(chapter_files)
     else:
         return {
             "status": "error",

@@ -20,21 +20,14 @@ from pathlib import Path
 from typing import List, Dict, Any, Optional, Tuple
 import requests
 from bs4 import BeautifulSoup
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
-from openai import OpenAI
-
-from ..constants import BOOKS_DIR, OPENAI_API_KEY, DEFAULT_LLM_MODEL, DEBUG_MODE
+from ..constants import BOOKS_DIR, DEBUG_MODE, MAX_WORKERS
+from ..ai import make_llm_request, get_ai_status
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-
-# Initialize OpenAI client
-if OPENAI_API_KEY:
-    client = OpenAI(api_key=OPENAI_API_KEY)
-else:
-    client = None
-    logger.warning("OpenAI API key not found. LLM analysis will be skipped.")
 
 
 def split_into_paragraphs(text: str) -> List[str]:
@@ -94,7 +87,7 @@ def split_into_paragraphs(text: str) -> List[str]:
 
 def analyze_paragraph_with_llm(paragraph: str, chapter_context: str = "") -> Dict[str, Any]:
     """
-    Analyze a paragraph using OpenAI's GPT to extract characters, settings, and dialogue info.
+    Analyze a paragraph using LLM (Anthropic or OpenAI) to extract characters, settings, and dialogue info.
     
     This function uses a carefully crafted prompt to analyze literary text and extract:
     - Character names and their roles/involvement
@@ -109,9 +102,11 @@ def analyze_paragraph_with_llm(paragraph: str, chapter_context: str = "") -> Dic
     Returns:
         Dict[str, Any]: Analysis results with characters, settings, and dialogue flag
     """
-    if not client:
+    # Check if any LLM provider is available
+    ai_status = get_ai_status()
+    if ai_status["preferred_provider"] == "none":
         # Fallback analysis without LLM
-        logger.warning("No OpenAI client available, using fallback analysis")
+        logger.warning("No LLM providers available, using fallback analysis")
         return {
             "characters": ["narrator"],
             "setting": [],
@@ -120,7 +115,7 @@ def analyze_paragraph_with_llm(paragraph: str, chapter_context: str = "") -> Dic
         }
     
     # Construct analysis prompt
-    prompt = f"""
+    user_prompt = f"""
     Analyze the following literary paragraph and extract key information. Be precise and concise.
 
     Paragraph:
@@ -145,22 +140,22 @@ def analyze_paragraph_with_llm(paragraph: str, chapter_context: str = "") -> Dic
     Return only the JSON object, no additional text.
     """
     
+    system_message = "You are a literary analysis expert. Analyze text precisely and return only valid JSON."
+    
     try:
-        response = client.chat.completions.create(
-            model=DEFAULT_LLM_MODEL,
-            messages=[
-                {"role": "system", "content": "You are a literary analysis expert. Analyze text precisely and return only valid JSON."},
-                {"role": "user", "content": prompt}
-            ],
+        # Make the LLM request using the unified interface
+        content = make_llm_request(
+            messages=[{"role": "user", "content": user_prompt}],
             max_tokens=200,
-            temperature=0.1
+            temperature=0.1,
+            system_message=system_message
         )
         
-        # Parse the response
-        content = response.choices[0].message.content.strip()
+        if content is None:
+            raise Exception("LLM request returned None")
         
         # Clean up the response (remove markdown formatting if present)
-        content = re.sub(r'```json\s*|\s*```', '', content)
+        content = re.sub(r'```json\s*|\s*```', '', content.strip())
         
         analysis = json.loads(content)
         
@@ -178,7 +173,8 @@ def analyze_paragraph_with_llm(paragraph: str, chapter_context: str = "") -> Dic
         
     except json.JSONDecodeError as e:
         logger.error(f"Failed to parse LLM response as JSON: {e}")
-        logger.error(f"Response content: {response.choices[0].message.content}")
+        if content:
+            logger.error(f"Response content: {content}")
         return {
             "characters": ["narrator"],
             "setting": [],
@@ -248,7 +244,7 @@ def process_chapter_to_json(chapter_text: str, chapter_num: int, novel_name: str
             "characters": analysis["characters"],
             "setting": analysis["setting"],
             "paragraph_idx": i,
-            "text_path": f"books/{novel_name}/raw_chapters/{chapter_num}.txt",
+            "text": paragraph,
             "word_count": len(paragraph.split()),
             "dialogue": analysis["dialogue"],
             "embedding_id": str(uuid.uuid4())
@@ -409,10 +405,10 @@ def fetch_author_info(author_name: str, novel_name: str) -> Tuple[str, str]:
 
 def process_novel_to_structured_json(novel_name: str, author_name: str) -> Dict[str, Any]:
     """
-    Process an entire novel from raw chapters to structured JSON format.
+    Process an entire novel from raw text files to structured JSON format.
     
     This is the main orchestration function that:
-    1. Reads all raw chapter files
+    1. Reads all raw chapter files from the raw/ directory
     2. Processes each chapter into structured JSON
     3. Creates book-level metadata
     4. Saves all structured data to disk
@@ -427,24 +423,24 @@ def process_novel_to_structured_json(novel_name: str, author_name: str) -> Dict[
     logger.info(f"Starting novel processing for '{novel_name}' by {author_name}")
     
     book_dir = BOOKS_DIR / novel_name
-    raw_chapters_dir = book_dir / "raw_chapters"
+    raw_dir = book_dir / "raw"
     structured_dir = book_dir / "structured"
     
     # Create structured directory
     structured_dir.mkdir(parents=True, exist_ok=True)
     
-    # Find all raw chapter files
-    chapter_files = sorted(raw_chapters_dir.glob("*.txt"), key=lambda x: int(x.stem))
+    # Find all raw chapter files (numbered files only, ignore front/back matter)
+    chapter_files = sorted([f for f in raw_dir.glob("*.txt") if f.stem.isdigit()], key=lambda x: int(x.stem))
     
     if not chapter_files:
-        raise FileNotFoundError(f"No raw chapter files found in {raw_chapters_dir}")
+        raise FileNotFoundError(f"No numbered chapter files found in {raw_dir}")
     
     logger.info(f"Found {len(chapter_files)} chapter files to process")
     
     # Process each chapter
     chapter_data = []
-    
-    for chapter_file in chapter_files:
+
+    def process_and_save_chapter(chapter_file, novel_name, structured_dir):
         chapter_num = int(chapter_file.stem)
         
         # Read chapter text
@@ -453,7 +449,6 @@ def process_novel_to_structured_json(novel_name: str, author_name: str) -> Dict[
         
         # Process chapter to JSON
         chapter_json = process_chapter_to_json(chapter_text, chapter_num, novel_name)
-        chapter_data.append(chapter_json)
         
         # Save chapter JSON
         chapter_json_file = structured_dir / f"{chapter_num}.json"
@@ -461,6 +456,19 @@ def process_novel_to_structured_json(novel_name: str, author_name: str) -> Dict[
             json.dump(chapter_json, f, indent=2, ensure_ascii=False)
         
         logger.info(f"Saved structured chapter {chapter_num} to {chapter_json_file}")
+        return chapter_json
+
+    # Use ThreadPoolExecutor to process chapters concurrently
+    with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
+        future_to_chapter = {executor.submit(process_and_save_chapter, chapter_file, novel_name, structured_dir): chapter_file for chapter_file in chapter_files}
+        
+        for future in as_completed(future_to_chapter):
+            chapter_file = future_to_chapter[future]
+            try:
+                chapter_json = future.result()
+                chapter_data.append(chapter_json)
+            except Exception as exc:
+                logger.error(f"Chapter {chapter_file.stem} generated an exception: {exc}")
     
     # Create book metadata
     book_metadata = create_book_metadata(novel_name, author_name, chapter_data)

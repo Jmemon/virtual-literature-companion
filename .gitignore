@@ -17,3 +17,6 @@ book_pdfs
 books
 
 specs
+
+page_classifier_sidequest/page_dataset/
+page_classifier_sidequest/generated_classifiers/

@@ -20,6 +20,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import Mock, patch, MagicMock
 import shutil
+import statistics
 
 # Import the components to test
 from virtual_literature_companion.constants import BOOKS_DIR, REPO_DIR
@@ -28,7 +29,10 @@ from virtual_literature_companion.processors.pdf2txt import (
     process_book_pdf, 
     validate_pdf_file, 
     detect_chapter_boundaries,
-    split_into_chapters
+    split_into_chapters,
+    categorize_page,
+    PageType,
+    calculate_word_stats
 )
 from virtual_literature_companion.processors.parse_novel_text import (
     split_into_paragraphs,
@@ -40,6 +44,9 @@ from virtual_literature_companion.processors.create_vector_indexes import (
     create_vector_indexes,
     VectorIndexCreator
 )
+from virtual_literature_companion.ai import get_ai_status, make_llm_request
+import statistics
+import math
 
 
 class TestPDFProcessing(unittest.TestCase):
@@ -118,6 +125,153 @@ class TestPDFProcessing(unittest.TestCase):
             self.assertGreater(len(para), 10)
             self.assertLess(len(para), 2000)  # Not too long
 
+    def test_calculate_word_stats(self):
+        """Test word statistics calculation."""
+        # Simple text
+        text = "This is a test with some repeated words words words."
+        word_count, diversity = calculate_word_stats(text)
+        self.assertEqual(word_count, 10)
+        unique_words = len(set(['this', 'is', 'a', 'test', 'with', 'some', 'repeated', 'words', 'words', 'words']))
+        self.assertEqual(diversity, unique_words / 10)
+        
+        # Empty text
+        word_count, diversity = calculate_word_stats("")
+        self.assertEqual(word_count, 0)
+        self.assertEqual(diversity, 0.0)
+        
+        # Single word
+        word_count, diversity = calculate_word_stats("hello")
+        self.assertEqual(word_count, 1)
+        self.assertEqual(diversity, 1.0)
+    
+    def test_categorize_page_title_with_stats(self):
+        """Test title page categorization with global stats.
+        
+        For a dense book (high mean_words), the threshold for very low density is stricter.
+        """
+        text = "Title of the Book\nBy Test Author"
+        page_num = 0
+        total_pages = 100
+        
+        # Dense book
+        mean_words = 800
+        std_words = 150
+        page_type = categorize_page(text, page_num, total_pages, mean_words, std_words)
+        self.assertEqual(page_type, PageType.TITLE_PAGE, "Should detect title in dense book")
+        
+        # Check density calculation
+        word_count, _ = calculate_word_stats(text)
+        effective_std = std_words
+        self.assertTrue(word_count < max(20, mean_words - 2 * effective_std))
+        
+        # Sparse book
+        mean_words = 200
+        std_words = 50
+        page_type = categorize_page(text, page_num, total_pages, mean_words, std_words)
+        self.assertEqual(page_type, PageType.TITLE_PAGE, "Should detect title in sparse book")
+    
+    def test_categorize_page_content_with_low_density_fallback(self):
+        """Test fallback to content for low density pages that don't match patterns."""
+        text = "Some random low content text without patterns."
+        page_num = 50  # Middle of book
+        total_pages = 100
+        mean_words = 500
+        std_words = 100
+        page_type = categorize_page(text, page_num, total_pages, mean_words, std_words)
+        self.assertEqual(page_type, PageType.CONTENT, "Should fallback to content")
+        
+        # Make it very low density but no patterns
+        text = "Few words."
+        page_type = categorize_page(text, page_num, total_pages, mean_words, std_words)
+        self.assertEqual(page_type, PageType.CONTENT, "Low density without patterns should be content")
+    
+    def test_categorize_page_with_zero_std(self):
+        """Test categorization when std_words is zero (uniform pages)."""
+        text = "Copyright © 2023 Test Publisher ISBN 1234567890"
+        page_num = 1
+        total_pages = 100
+        mean_words = 300
+        std_words = 0
+        page_type = categorize_page(text, page_num, total_pages, mean_words, std_words)
+        self.assertEqual(page_type, PageType.COPYRIGHT_PAGE, "Should detect copyright with fallback effective_std")
+        
+        # Check fallback effective_std
+        word_count, _ = calculate_word_stats(text)
+        effective_std = max(100, mean_words * 0.2)  # 100 since 300*0.2=60 <100
+        self.assertTrue(word_count < max(50, mean_words - effective_std))
+    
+    def test_categorize_page_chapter_start_independent_of_stats(self):
+        """Test chapter start detection, which doesn't use density."""
+        text = "Chapter 1\nThe Adventure Begins"
+        page_num = 10
+        total_pages = 100
+        mean_words = 500
+        std_words = 100
+        page_type = categorize_page(text, page_num, total_pages, mean_words, std_words)
+        self.assertEqual(page_type, PageType.CHAPTER_START)
+        
+        # Even with low density
+        mean_words = 1000
+        page_type = categorize_page(text, page_num, total_pages, mean_words, std_words)
+        self.assertEqual(page_type, PageType.CHAPTER_START, "Chapter detection should ignore density")
+    
+    @patch('virtual_literature_companion.processors.pdf2txt.pdfplumber')
+    @patch('virtual_literature_companion.processors.pdf2txt.extract_page_text')
+    def test_process_book_pdf_statistics_computation(self, mock_extract, mock_pdfplumber):
+        """Test statistics computation in process_book_pdf.
+        
+        Simulates page extraction and verifies mean/std calculation.
+        """
+        # Mock pdfplumber for total_pages
+        mock_pdf = MagicMock()
+        mock_pdf.pages = [MagicMock() for _ in range(3)]
+        mock_pdfplumber.open.return_value.__enter__.return_value = mock_pdf
+        
+        # Mock extract_page_text returns (page_num, text)
+        mock_extract.side_effect = [
+            (0, "Short title page"),
+            (1, "Medium content with more words to test counting."),
+            (2, "Long content page with even more text for higher word count.")
+        ]
+        
+        # Compute expected stats
+        texts = [
+            "Short title page",
+            "Medium content with more words to test counting.",
+            "Long content page with even more text for higher word count."
+        ]
+        word_counts = [calculate_word_stats(t)[0] for t in texts]
+        expected_mean = statistics.mean(word_counts)
+        expected_std = statistics.stdev(word_counts) if len(word_counts) > 1 else 0
+        
+        # Call process_book_pdf (will fail later but we check stats log)
+        with patch('virtual_literature_companion.processors.pdf2txt.logger') as mock_logger:
+            try:
+                process_book_pdf('dummy.pdf', 'test_novel')
+            except:
+                pass  # Expected since no real PDF
+            
+            # Check if stats were logged correctly
+            log_call = [call for call in mock_logger.info.call_args_list if 'Global stats' in call[0][0]]
+            self.assertTrue(log_call)
+            log_text = log_call[0][0][0]
+            self.assertIn(f'mean_words={expected_mean:.1f}', log_text)
+            self.assertIn(f'std_words={expected_std:.1f}', log_text)
+    
+    def test_categorize_page_index_with_stats(self):
+        """Test index page categorization in back matter with density checks."""
+        text = "Index\nApple 1-3\nBanana 4, 5\nCherry 6-8"
+        page_num = 95  # Near end
+        total_pages = 100
+        mean_words = 600
+        std_words = 120
+        page_type = categorize_page(text, page_num, total_pages, mean_words, std_words)
+        self.assertEqual(page_type, PageType.INDEX_PAGE)
+        
+        # Check if it was classified as very low density
+        word_count, _ = calculate_word_stats(text)
+        self.assertTrue(word_count < max(20, mean_words - 2 * std_words))
+
 
 class TestLiteraryAnalysis(unittest.TestCase):
     """Test literary analysis functionality."""
@@ -135,20 +289,23 @@ class TestLiteraryAnalysis(unittest.TestCase):
         Winston turned around to see O'Brien approaching with a smile.
         """
     
-    @patch('virtual_literature_companion.processors.parse_novel_text.client')
-    def test_llm_analysis_with_mock(self, mock_client):
-        """Test LLM analysis with mocked OpenAI client."""
-        # Mock the OpenAI response
-        mock_response = Mock()
-        mock_response.choices = [Mock()]
-        mock_response.choices[0].message.content = json.dumps({
+    @patch('virtual_literature_companion.processors.parse_novel_text.make_llm_request')
+    @patch('virtual_literature_companion.processors.parse_novel_text.get_ai_status')
+    def test_llm_analysis_with_mock(self, mock_ai_status, mock_llm_request):
+        """Test LLM analysis with mocked AI module."""
+        # Mock AI status to indicate available provider
+        mock_ai_status.return_value = {
+            "preferred_provider": "openai",
+            "providers": {"anthropic": False, "openai": True}
+        }
+        
+        # Mock the LLM response
+        mock_llm_request.return_value = json.dumps({
             "characters": ["Winston Smith"],
             "setting": ["Victory Mansions"],
             "dialogue": False,
             "confidence": 0.9
         })
-        
-        mock_client.chat.completions.create.return_value = mock_response
         
         # Test analysis
         result = analyze_paragraph_with_llm(self.sample_paragraph)
@@ -164,6 +321,10 @@ class TestLiteraryAnalysis(unittest.TestCase):
         self.assertEqual(result["characters"], ["Winston Smith"])
         self.assertEqual(result["setting"], ["Victory Mansions"])
         self.assertFalse(result["dialogue"])
+        
+        # Verify the AI functions were called
+        mock_ai_status.assert_called()
+        mock_llm_request.assert_called_once()
     
     def test_dialogue_detection(self):
         """Test dialogue detection in paragraphs."""

@@ -21,8 +21,9 @@ import sys
 from pathlib import Path
 from typing import Dict, Any, List, Optional
 
-from .constants import DEBUG_MODE, BOOKS_DIR, OPENAI_API_KEY
+from .constants import DEBUG_MODE, BOOKS_DIR
 from .ingest import ingest_book_pdf, list_ingested_books
+from .ai import get_ai_status
 
 # Configure logging for CLI
 logging.basicConfig(
@@ -62,9 +63,10 @@ def cli(ctx: click.Context, debug: bool, quiet: bool):
     
     # Display system info in debug mode
     if debug:
+        ai_status = get_ai_status()
         click.echo(f"Debug mode enabled")
         click.echo(f"Books directory: {BOOKS_DIR}")
-        click.echo(f"OpenAI API configured: {'Yes' if OPENAI_API_KEY else 'No'}")
+        click.echo(f"AI provider: {ai_status['preferred_provider']}")
 
 
 @cli.command()
@@ -110,8 +112,9 @@ def ingest(
         click.echo("=" * 50)
     
     # Validate prerequisites
-    if not OPENAI_API_KEY:
-        click.echo("⚠️  Warning: OpenAI API key not found. Literary analysis will be limited.", err=True)
+    ai_status = get_ai_status()
+    if ai_status["preferred_provider"] == "none":
+        click.echo("⚠️  Warning: No AI providers available. Literary analysis will be limited.", err=True)
     
     # Start ingestion process
     try:
@@ -265,9 +268,21 @@ def status(ctx: click.Context):
         click.echo("=" * 50)
         
         # System configuration
+        ai_status = get_ai_status()
         click.echo(f"📁 Books directory: {BOOKS_DIR}")
         click.echo(f"📊 Debug mode: {'Enabled' if DEBUG_MODE else 'Disabled'}")
-        click.echo(f"🔑 OpenAI API: {'Configured' if OPENAI_API_KEY else 'Not configured'}")
+        click.echo(f"🤖 AI provider: {ai_status['preferred_provider']}")
+        
+        if ai_status['preferred_provider'] != 'none':
+            provider = ai_status['preferred_provider']
+            model = ai_status['models'][provider]
+            click.echo(f"🔤 AI model: {model}")
+        
+        # AI provider details
+        click.echo(f"\n🔑 AI Configuration:")
+        for provider, available in ai_status['providers'].items():
+            status = "✅ Available" if available else "❌ Not available"
+            click.echo(f"  {provider.title()}: {status}")
         
         # Check dependencies
         click.echo("\n📦 Dependencies:")
@@ -275,10 +290,12 @@ def status(ctx: click.Context):
             'pdfplumber': 'PDF text extraction',
             'pytesseract': 'OCR processing',
             'chromadb': 'Vector database',
-            'openai': 'Language model API',
+            'anthropic': 'Anthropic AI API',
+            'openai': 'OpenAI API',
             'sentence_transformers': 'Text embeddings',
             'requests': 'Web scraping',
-            'beautifulsoup4': 'HTML parsing'
+            'beautifulsoup4': 'HTML parsing',
+            'python_dotenv': 'Environment configuration'
         }
         
         for dep, description in dependencies.items():

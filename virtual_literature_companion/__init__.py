@@ -34,6 +34,7 @@ __email__ = "contact@vlc.com"
 # Import main functions for easy access
 from .ingest import ingest_book_pdf, list_ingested_books
 from .constants import BOOKS_DIR, SRC_DIR, REPO_DIR
+from .ai import get_ai_status, get_llm_client, make_llm_request
 
 # Export key functions and constants
 __all__ = [
@@ -42,5 +43,8 @@ __all__ = [
     'BOOKS_DIR',
     'SRC_DIR',
     'REPO_DIR',
+    'get_ai_status',
+    'get_llm_client',
+    'make_llm_request',
     '__version__'
 ] 
