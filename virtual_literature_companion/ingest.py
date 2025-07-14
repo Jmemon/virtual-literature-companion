@@ -21,7 +21,8 @@ from pathlib import Path
 from typing import Dict, Any, Optional, List
 
 from .constants import DEBUG_MODE, BOOKS_DIR
-from .processors.pdf2txt import process_book_pdf, validate_pdf_file
+from .processors.pdf2txt import extract_and_clean_pages, validate_pdf_file
+from .processors.process_novel_text import process_extracted_pages
 from .processors.parse_novel_text import process_novel_to_structured_json
 from .processors.create_vector_indexes import create_vector_indexes
 
@@ -112,38 +113,50 @@ def ingest_book_pdf(
     progress = ProcessingProgress(novel_name)
     
     try:
-        # Step 1: PDF to text conversion
+        # Step 1: PDF extraction and cleaning
         logger.info("=" * 60)
-        logger.info("STEP 1: PDF to text conversion")
+        logger.info("STEP 1: PDF extraction and cleaning")
         logger.info("=" * 60)
         
         progress.start_step("pdf_extraction")
         
-        # Validate PDF file
         if not validate_pdf_file(str(pdf_path)):
             raise ValueError(f"Invalid or corrupted PDF file: {pdf_path}")
         
-        # Extract text and split into chapters
-        chapter_texts = process_book_pdf(str(pdf_path), novel_name)
+        page_texts, total_pages = extract_and_clean_pages(str(pdf_path))
         
-        if not chapter_texts:
+        if not page_texts:
             raise ValueError("No text could be extracted from the PDF")
         
         progress.complete_step("pdf_extraction", {
-            "chapters_extracted": len(chapter_texts),
-            "total_characters": sum(len(text) for text in chapter_texts)
+            "pages_extracted": len(page_texts),
+            "total_characters": sum(len(text) for text in page_texts.values())
         })
         
-        logger.info(f"✓ PDF processing complete: {len(chapter_texts)} chapters extracted")
+        logger.info(f"✓ PDF extraction and cleaning complete: {len(page_texts)} pages")
         
-        # Step 2: Text parsing and structuring
+        # Step 2: Page processing and raw text creation
         logger.info("=" * 60)
-        logger.info("STEP 2: Text parsing and structuring")
+        logger.info("STEP 2: Page processing and raw text creation")
+        logger.info("=" * 60)
+        
+        progress.start_step("page_processing")
+        
+        chapter_texts = process_extracted_pages(page_texts, novel_name, total_pages)
+        
+        progress.complete_step("page_processing", {
+            "chapters_created": len(chapter_texts)
+        })
+        
+        logger.info(f"✓ Page processing complete: {len(chapter_texts)} chapters created")
+        
+        # Step 3: Text parsing and structuring
+        logger.info("=" * 60)
+        logger.info("STEP 3: Text parsing and structuring")
         logger.info("=" * 60)
         
         progress.start_step("text_parsing")
         
-        # Process chapters into structured JSON
         parsing_result = process_novel_to_structured_json(novel_name, author_name)
         
         if parsing_result["status"] != "success":
@@ -156,14 +169,13 @@ def ingest_book_pdf(
         
         logger.info(f"✓ Text parsing complete: {parsing_result['chapters_processed']} chapters structured")
         
-        # Step 3: Vector index creation
+        # Step 4: Vector index creation
         logger.info("=" * 60)
-        logger.info("STEP 3: Vector index creation")
+        logger.info("STEP 4: Vector index creation")
         logger.info("=" * 60)
         
         progress.start_step("vector_indexing")
         
-        # Create vector indexes
         indexing_result = create_vector_indexes(novel_name)
         
         if indexing_result["status"] != "success":
@@ -176,14 +188,13 @@ def ingest_book_pdf(
         
         logger.info(f"✓ Vector indexing complete: {indexing_result['statistics']['total_paragraphs']} paragraphs indexed")
         
-        # Step 4: Final validation and cleanup
+        # Step 5: Final validation
         logger.info("=" * 60)
-        logger.info("STEP 4: Final validation")
+        logger.info("STEP 5: Final validation")
         logger.info("=" * 60)
         
         progress.start_step("validation")
         
-        # Validate the complete processing
         validation_result = _validate_complete_processing(book_dir)
         
         if validation_result["status"] != "success":
