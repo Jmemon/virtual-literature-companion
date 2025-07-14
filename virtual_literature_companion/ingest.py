@@ -23,8 +23,9 @@ from typing import Dict, Any, Optional, List
 from .constants import DEBUG_MODE, BOOKS_DIR
 from .processors.pdf2txt import extract_and_clean_pages, validate_pdf_file
 from .processors.process_novel_text import process_extracted_pages
-from .processors.parse_novel_text import process_novel_to_structured_json
-from .processors.create_vector_indexes import create_vector_indexes
+from .processors.parse_novel_text import process_chapters_to_structured
+from .indexes.create_vector_indexes import create_vector_indexes
+from .novel_artifacts_manager import NovelArtifactsManager
 
 # Configure logging
 logging.basicConfig(
@@ -112,6 +113,8 @@ def ingest_book_pdf(
     # Create progress tracker
     progress = ProcessingProgress(novel_name)
     
+    artifacts_manager = NovelArtifactsManager(novel_name)
+    
     try:
         # Step 1: PDF extraction and cleaning
         logger.info("=" * 60)
@@ -136,46 +139,36 @@ def ingest_book_pdf(
         logger.info(f"✓ PDF extraction and cleaning complete: {len(page_texts)} pages")
         
         # Step 2: Page processing and raw text creation
-        logger.info("=" * 60)
-        logger.info("STEP 2: Page processing and raw text creation")
-        logger.info("=" * 60)
+        front_matter, back_matter, chapter_texts = process_extracted_pages(page_texts, novel_name, total_pages)
         
-        progress.start_step("page_processing")
-        
-        chapter_texts = process_extracted_pages(page_texts, novel_name, total_pages)
+        # Save raw files using manager
+        for filename, text in front_matter.items():
+            artifacts_manager.save_raw_file(filename, text)
+        for filename, text in back_matter.items():
+            artifacts_manager.save_raw_file(filename, text)
+        for i, text in enumerate(chapter_texts, 1):
+            artifacts_manager.save_raw_file(f"{i}.txt", text)
         
         progress.complete_step("page_processing", {
-            "chapters_created": len(chapter_texts)
+            "chapters_created": len(chapter_texts),
+            "front_matter_files": len(front_matter),
+            "back_matter_files": len(back_matter)
         })
         
-        logger.info(f"✓ Page processing complete: {len(chapter_texts)} chapters created")
-        
         # Step 3: Text parsing and structuring
-        logger.info("=" * 60)
-        logger.info("STEP 3: Text parsing and structuring")
-        logger.info("=" * 60)
+        chapter_data, book_metadata = process_chapters_to_structured(chapter_texts, author_name, novel_name)
         
-        progress.start_step("text_parsing")
-        
-        parsing_result = process_novel_to_structured_json(novel_name, author_name)
-        
-        if parsing_result["status"] != "success":
-            raise ValueError(f"Text parsing failed: {parsing_result}")
+        # Save structured files using manager
+        for chapter in chapter_data:
+            artifacts_manager.save_structured_chapter(chapter['chapter_num'], chapter)
+        artifacts_manager.save_metadata(book_metadata)
         
         progress.complete_step("text_parsing", {
-            "chapters_processed": parsing_result["chapters_processed"],
+            "chapters_processed": len(chapter_data),
             "metadata_created": True
         })
         
-        logger.info(f"✓ Text parsing complete: {parsing_result['chapters_processed']} chapters structured")
-        
         # Step 4: Vector index creation
-        logger.info("=" * 60)
-        logger.info("STEP 4: Vector index creation")
-        logger.info("=" * 60)
-        
-        progress.start_step("vector_indexing")
-        
         indexing_result = create_vector_indexes(novel_name)
         
         if indexing_result["status"] != "success":
@@ -209,7 +202,7 @@ def ingest_book_pdf(
             "novel_name": novel_name,
             "author_name": author_name,
             "statistics": {
-                "chapters": parsing_result["chapters_processed"],
+                "chapters": len(chapter_data),
                 "paragraphs": indexing_result["statistics"]["total_paragraphs"],
                 "total_characters": progress.get_step_data("pdf_extraction").get("total_characters", 0),
                 "indexes_created": len(indexing_result["indexes_created"])

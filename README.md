@@ -266,7 +266,7 @@ books = list_ingested_books()
 
 ### **Vector Search Example**
 ```python
-from virtual_literature_companion.processors.create_vector_indexes import VectorIndexCreator
+from virtual_literature_companion.indexes.create_vector_indexes import VectorIndexCreator
 
 # Create index creator
 creator = VectorIndexCreator("1984")
@@ -277,6 +277,17 @@ results = creator.test_index_query(
     "Winston's relationship with Big Brother",
     n_results=5
 )
+```
+
+### Vector Indexes
+
+To create vector indexes for a processed novel:
+
+```python
+from virtual_literature_companion.indexes.create_vector_indexes import VectorIndexCreator
+
+creator = VectorIndexCreator('novel_name')
+creator.create_indexes()
 ```
 
 ## 🧪 Testing

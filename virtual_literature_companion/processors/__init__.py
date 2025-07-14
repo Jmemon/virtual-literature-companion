@@ -14,13 +14,11 @@ or as part of the complete ingestion pipeline.
 
 from .pdf2txt import extract_and_clean_pages, validate_pdf_file
 from .process_novel_text import process_extracted_pages
-from .parse_novel_text import process_novel_to_structured_json
-from .create_vector_indexes import create_vector_indexes
+from .parse_novel_text import process_chapters_to_structured
 
 __all__ = [
     'extract_and_clean_pages',
     'validate_pdf_file',
     'process_extracted_pages',
-    'process_novel_to_structured_json',
-    'create_vector_indexes'
+    'process_chapters_to_structured'
 ] 

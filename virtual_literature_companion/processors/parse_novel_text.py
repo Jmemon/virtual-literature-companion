@@ -403,86 +403,31 @@ def fetch_author_info(author_name: str, novel_name: str) -> Tuple[str, str]:
     return author_bio, publication_date
 
 
-def process_novel_to_structured_json(novel_name: str, author_name: str) -> Dict[str, Any]:
+def process_chapters_to_structured(chapter_texts: List[str], author_name: str, novel_name: str) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
     """
-    Process an entire novel from raw text files to structured JSON format.
-    
-    This is the main orchestration function that:
-    1. Reads all raw chapter files from the raw/ directory
-    2. Processes each chapter into structured JSON
-    3. Creates book-level metadata
-    4. Saves all structured data to disk
+    Process chapter texts into structured data and metadata.
     
     Args:
-        novel_name (str): Name of the novel
+        chapter_texts (List[str]): List of raw chapter texts
         author_name (str): Name of the author
+        novel_name (str): Name of the novel
         
     Returns:
-        Dict[str, Any]: Processing results and metadata
+        Tuple[List[Dict[str, Any]], Dict[str, Any]]: (chapter_data, book_metadata)
     """
-    logger.info(f"Starting novel processing for '{novel_name}' by {author_name}")
+    logger.info(f"Starting chapter processing for '{novel_name}' by {author_name}")
     
-    book_dir = BOOKS_DIR / novel_name
-    raw_dir = book_dir / "raw"
-    structured_dir = book_dir / "structured"
-    
-    # Create structured directory
-    structured_dir.mkdir(parents=True, exist_ok=True)
-    
-    # Find all raw chapter files (numbered files only, ignore front/back matter)
-    chapter_files = sorted([f for f in raw_dir.glob("*.txt") if f.stem.isdigit()], key=lambda x: int(x.stem))
-    
-    if not chapter_files:
-        raise FileNotFoundError(f"No numbered chapter files found in {raw_dir}")
-    
-    logger.info(f"Found {len(chapter_files)} chapter files to process")
+    if not chapter_texts:
+        raise ValueError("No chapter texts provided")
     
     # Process each chapter
     chapter_data = []
-
-    def process_and_save_chapter(chapter_file, novel_name, structured_dir):
-        chapter_num = int(chapter_file.stem)
-        
-        # Read chapter text
-        with open(chapter_file, 'r', encoding='utf-8') as f:
-            chapter_text = f.read()
-        
-        # Process chapter to JSON
+    for chapter_num, chapter_text in enumerate(chapter_texts, 1):
         chapter_json = process_chapter_to_json(chapter_text, chapter_num, novel_name)
-        
-        # Save chapter JSON
-        chapter_json_file = structured_dir / f"{chapter_num}.json"
-        with open(chapter_json_file, 'w', encoding='utf-8') as f:
-            json.dump(chapter_json, f, indent=2, ensure_ascii=False)
-        
-        logger.info(f"Saved structured chapter {chapter_num} to {chapter_json_file}")
-        return chapter_json
-
-    # Use ThreadPoolExecutor to process chapters concurrently
-    with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
-        future_to_chapter = {executor.submit(process_and_save_chapter, chapter_file, novel_name, structured_dir): chapter_file for chapter_file in chapter_files}
-        
-        for future in as_completed(future_to_chapter):
-            chapter_file = future_to_chapter[future]
-            try:
-                chapter_json = future.result()
-                chapter_data.append(chapter_json)
-            except Exception as exc:
-                logger.error(f"Chapter {chapter_file.stem} generated an exception: {exc}")
+        chapter_data.append(chapter_json)
+        logger.info(f"Processed chapter {chapter_num}")
     
     # Create book metadata
     book_metadata = create_book_metadata(novel_name, author_name, chapter_data)
     
-    # Save book metadata
-    metadata_file = book_dir / "metadata.json"
-    with open(metadata_file, 'w', encoding='utf-8') as f:
-        json.dump(book_metadata, f, indent=2, ensure_ascii=False)
-    
-    logger.info(f"Saved book metadata to {metadata_file}")
-    
-    return {
-        "status": "success",
-        "chapters_processed": len(chapter_data),
-        "metadata": book_metadata,
-        "output_directory": str(structured_dir)
-    } 
+    return chapter_data, book_metadata 

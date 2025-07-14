@@ -40,7 +40,7 @@ from virtual_literature_companion.processors.parse_novel_text import (
     process_chapter_to_json,
     create_book_metadata
 )
-from virtual_literature_companion.processors.create_vector_indexes import (
+from virtual_literature_companion.indexes.create_vector_indexes import (
     create_vector_indexes,
     VectorIndexCreator
 )
@@ -402,8 +402,8 @@ class TestVectorIndexing(unittest.TestCase):
         """Clean up test environment."""
         shutil.rmtree(self.test_dir, ignore_errors=True)
     
-    @patch('virtual_literature_companion.processors.create_vector_indexes.SentenceTransformer')
-    @patch('virtual_literature_companion.processors.create_vector_indexes.chromadb')
+    @patch('virtual_literature_companion.indexes.create_vector_indexes.SentenceTransformer')
+    @patch('virtual_literature_companion.indexes.create_vector_indexes.chromadb')
     def test_vector_index_creation(self, mock_chromadb, mock_sentence_transformer):
         """Test vector index creation with mocked dependencies."""
         # Mock sentence transformer
@@ -418,7 +418,7 @@ class TestVectorIndexing(unittest.TestCase):
         mock_chromadb.PersistentClient.return_value = mock_client
         
         # Test index creation
-        with patch('virtual_literature_companion.processors.create_vector_indexes.BOOKS_DIR', self.test_dir):
+        with patch('virtual_literature_companion.indexes.create_vector_indexes.BOOKS_DIR', self.test_dir):
             creator = VectorIndexCreator("test_novel")
             
             # Test siloed index creation
@@ -473,8 +473,8 @@ class TestIngestionPipeline(unittest.TestCase):
         shutil.rmtree(self.test_dir, ignore_errors=True)
     
     @patch('virtual_literature_companion.processors.pdf2txt.process_book_pdf')
-    @patch('virtual_literature_companion.processors.parse_novel_text.process_novel_to_structured_json')
-    @patch('virtual_literature_companion.processors.create_vector_indexes.create_vector_indexes')
+    @patch('virtual_literature_companion.processors.parse_novel_text.process_chapters_to_structured')
+    @patch('virtual_literature_companion.indexes.create_vector_indexes.create_vector_indexes')
     def test_complete_ingestion_pipeline(self, mock_vector_indexes, mock_parse_novel, mock_pdf_process):
         """Test the complete ingestion pipeline with mocked processors."""
         # Mock the processors

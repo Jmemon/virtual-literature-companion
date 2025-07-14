@@ -335,20 +335,11 @@ def extract_chapters_from_pages(pages_by_type: Dict[PageType, List[Tuple[int, st
     return chapter_texts
 
 
-def process_extracted_pages(page_texts: Dict[int, str], novel_name: str, total_pages: int) -> List[str]:
+def process_extracted_pages(page_texts: Dict[int, str], novel_name: str, total_pages: int) -> Tuple[Dict[str, str], Dict[str, str], List[str]]:
     """
     Process extracted and cleaned page texts into categorized content with chapter splitting.
     
-    This function computes statistics, categorizes pages, processes front/back matter,
-    extracts chapters, and saves to raw directory.
-    
-    Args:
-        page_texts (Dict[int, str]): Dictionary of page number to cleaned text
-        novel_name (str): Name of the novel
-        total_pages (int): Total number of pages
-        
-    Returns:
-        List[str]: List of chapter texts
+    Returns front matter, back matter, and chapter texts without saving.
     """
     logger.info(f"Processing extracted pages for '{novel_name}'")
     
@@ -388,28 +379,46 @@ def process_extracted_pages(page_texts: Dict[int, str], novel_name: str, total_p
     for page_type, pages in pages_by_type.items():
         logger.info(f"Found {len(pages)} page(s) of type: {page_type.value}")
     
-    # Create output directory
-    book_dir = BOOKS_DIR / novel_name
-    raw_dir = book_dir / "raw"
-    raw_dir.mkdir(parents=True, exist_ok=True)
+    # Process front matter
+    front_matter = {}
+    front_matter_types = [
+        (PageType.TITLE_PAGE, "title.txt"),
+        (PageType.COPYRIGHT_PAGE, "copyright.txt"),
+        (PageType.DEDICATION_PAGE, "dedication.txt"),
+        (PageType.TABLE_OF_CONTENTS_PAGE, "table_of_contents.txt"),
+        (PageType.FOREWORD_PREFACE_START, "foreword_preface.txt"),
+        (PageType.ACKNOWLEDGEMENTS_START, "acknowledgements.txt"),
+        (PageType.INTRODUCTION_START, "introduction.txt"),
+    ]
+    for page_type, filename in front_matter_types:
+        if page_type in pages_by_type:
+            sorted_pages = sorted(pages_by_type[page_type], key=lambda x: x[0])
+            combined_text = "\n\n".join(text for _, text in sorted_pages)
+            if combined_text.strip():
+                front_matter[filename] = combined_text
+                logger.info(f"Processed {filename} from {len(sorted_pages)} page(s)")
     
-    # Process different page types
-    process_front_matter_pages(pages_by_type, raw_dir)
-    process_back_matter_pages(pages_by_type, raw_dir)
+    # Process back matter
+    back_matter = {}
+    back_matter_types = [
+        (PageType.APPENDIX_START, "appendix.txt"),
+        (PageType.GLOSSARY_START, "glossary.txt"),
+        (PageType.BIBLIOGRAPHY_PAGE, "bibliography.txt"),
+        (PageType.INDEX_PAGE, "index.txt"),
+    ]
+    for page_type, filename in back_matter_types:
+        if page_type in pages_by_type:
+            sorted_pages = sorted(pages_by_type[page_type], key=lambda x: x[0])
+            combined_text = "\n\n".join(text for _, text in sorted_pages)
+            if combined_text.strip():
+                back_matter[filename] = combined_text
+                logger.info(f"Processed {filename} from {len(sorted_pages)} page(s)")
     
-    # Extract chapters based on page categorization
+    # Extract chapters
     chapter_texts = extract_chapters_from_pages(pages_by_type, all_pages)
-    
-    # Write chapter files
-    for i, chapter_text in enumerate(chapter_texts, 1):
-        chapter_file = raw_dir / f"{i}.txt"
-        with open(chapter_file, 'w', encoding='utf-8') as f:
-            f.write(chapter_text)
-        
-        logger.info(f"Created chapter file: {chapter_file} ({len(chapter_text)} characters)")
     
     total_chars = sum(len(text) for text in page_texts.values())
     logger.info(f"Successfully processed '{novel_name}': {total_chars} total characters, "
                 f"{len(chapter_texts)} chapters, {len(pages_by_type)} different page types")
     
-    return chapter_texts 
+    return front_matter, back_matter, chapter_texts 
