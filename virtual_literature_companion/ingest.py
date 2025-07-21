@@ -18,12 +18,14 @@ book processing experience.
 import logging
 import traceback
 from pathlib import Path
+import traceback
 from typing import Dict, Any, Optional, List
 
 from .constants import DEBUG_MODE, BOOKS_DIR
-from .processors.pdf2txt import extract_and_clean_pages, validate_pdf_file
+from .processors.page_extraction import extract_page_text, validate_pdf_file
+from .processors.page_cleaning import clean_pages_async
 from .processors.process_novel_text import process_extracted_pages
-from .processors.parse_novel_text import process_chapters_to_structured
+from .processors.novel_text_to_json import process_chapters_to_structured
 from .indexes.create_vector_indexes import create_vector_indexes
 from .novel_artifacts_manager import NovelArtifactsManager
 
@@ -35,7 +37,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-def ingest_book_pdf(
+async def ingest_book_pdf_async(
     pdf_path: str, 
     novel_name: str, 
     author_name: str,
@@ -126,20 +128,22 @@ def ingest_book_pdf(
         if not validate_pdf_file(str(pdf_path)):
             raise ValueError(f"Invalid or corrupted PDF file: {pdf_path}")
         
-        page_texts, total_pages = extract_and_clean_pages(str(pdf_path))
+        page_texts, total_pages = extract_page_text(str(pdf_path))
         
         if not page_texts:
             raise ValueError("No text could be extracted from the PDF")
         
+        cleaned_page_texts = await clean_pages_async(page_texts)
+        
         progress.complete_step("pdf_extraction", {
-            "pages_extracted": len(page_texts),
-            "total_characters": sum(len(text) for text in page_texts.values())
+            "pages_extracted": len(cleaned_page_texts),
+            "total_characters": sum(len(text) for text in cleaned_page_texts.values())
         })
         
-        logger.info(f"✓ PDF extraction and cleaning complete: {len(page_texts)} pages")
+        logger.info(f"✓ PDF extraction and cleaning complete: {len(cleaned_page_texts)} pages")
         
         # Step 2: Page processing and raw text creation
-        front_matter, back_matter, chapter_texts = process_extracted_pages(page_texts, novel_name, total_pages)
+        front_matter, back_matter, chapter_texts = process_extracted_pages(cleaned_page_texts, novel_name, total_pages)
         
         # Save raw files using manager
         for filename, text in front_matter.items():
@@ -232,6 +236,7 @@ def ingest_book_pdf(
         
     except Exception as e:
         logger.error(f"Error during book ingestion: {str(e)}")
+        logger.error(f"Full traceback: {traceback.format_exc()}")
         
         if DEBUG_MODE:
             logger.error(f"Full traceback: {traceback.format_exc()}")

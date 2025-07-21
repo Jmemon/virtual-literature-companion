@@ -16,8 +16,8 @@ import datetime
 from collections import Counter, defaultdict
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-from virtual_literature_companion.ai import make_llm_request
-from virtual_literature_companion.processors.pdf2txt import PageType
+from virtual_literature_companion.llm.general import make_llm_request
+from virtual_literature_companion.processors.process_novel_text import PageType
 
 dataset_dir = Path('page_classifier_sidequest/page_dataset')
 classifier_file = Path('page_classifier_sidequest/generated_classifier.py')

@@ -23,7 +23,7 @@ from bs4 import BeautifulSoup
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from ..constants import BOOKS_DIR, DEBUG_MODE, MAX_WORKERS
-from ..ai import make_llm_request, get_ai_status
+from ..llm.request import make_llm_request, get_ai_status
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)

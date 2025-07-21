@@ -10,7 +10,7 @@ from pathlib import Path
 import sys
 import os
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-from virtual_literature_companion.processors.pdf2txt import PageType
+from virtual_literature_companion.processors.process_novel_text import PageType
 
 dataset_dir = Path('page_classifier_sidequest/page_dataset')
 

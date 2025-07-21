@@ -18,12 +18,13 @@ import click
 import json
 import logging
 import sys
+import asyncio
 from pathlib import Path
 from typing import Dict, Any, List, Optional
 
 from .constants import DEBUG_MODE, BOOKS_DIR
-from .ingest import ingest_book_pdf, list_ingested_books
-from .ai import get_ai_status
+from .ingest import ingest_book_pdf_async, list_ingested_books
+from .llm.general import get_ai_status
 
 # Configure logging for CLI
 logging.basicConfig(
@@ -126,13 +127,13 @@ def ingest(
         ) as bar:
             # This is a simplified progress bar - in a real implementation,
             # you'd want to integrate with the ProcessingProgress class
-            result = ingest_book_pdf(
+            result = asyncio.run(ingest_book_pdf_async(
                 pdf_path=pdf_path,
                 novel_name=novel_name,
                 author_name=author_name,
                 skip_existing=skip_existing,
                 clean_on_error=not no_cleanup
-            )
+            ))
             bar.update(100)
         
         # Handle results

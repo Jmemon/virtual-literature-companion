@@ -20,6 +20,9 @@ import random
 from typing import Optional, Dict, Any, Union
 from dotenv import load_dotenv
 
+from virtual_literature_companion.config import LLMConfig
+
+
 # Configure logging
 logger = logging.getLogger(__name__)
 
@@ -45,49 +48,20 @@ except ImportError:
     logger.warning("OpenAI package not available. Install with: pip install openai")
 
 
-class AIProvider:
-    """Enumeration of supported AI providers."""
-    ANTHROPIC = "anthropic"
-    OPENAI = "openai"
-    NONE = "none"
-
-
-def get_available_providers() -> Dict[str, bool]:
+def get_client(config: LLMConfig) -> Optional[object]:
     """
-    Get information about available AI providers.
+    Create and return a client.
     
     Returns:
-        Dict[str, bool]: Dictionary mapping provider names to availability
+        Optional[object]: Client or None if unavailable
     """
-    anthropic_key = os.getenv("ANTHROPIC_API_KEY")
-    openai_key = os.getenv("OPENAI_API_KEY")
-    
-    return {
-        AIProvider.ANTHROPIC: _anthropic_available and bool(anthropic_key),
-        AIProvider.OPENAI: _openai_available and bool(openai_key),
-    }
-
-
-def get_preferred_provider() -> str:
-    """
-    Get the preferred AI provider based on availability and configuration.
-    
-    Priority order:
-    1. Anthropic (if API key available)
-    2. OpenAI (if API key available)
-    3. None (no providers available)
-    
-    Returns:
-        str: The preferred provider name or "none" if none available
-    """
-    available = get_available_providers()
-    
-    if available[AIProvider.ANTHROPIC]:
-        return AIProvider.ANTHROPIC
-    elif available[AIProvider.OPENAI]:
-        return AIProvider.OPENAI
+    if config.provider == "anthropic":
+        return create_anthropic_client()
+    elif config.provider == "openai":
+        return create_openai_client()
     else:
-        return AIProvider.NONE
+        logger.error(f"Unsupported provider: {config.provider}")
+        return None
 
 
 def create_anthropic_client() -> Optional[object]:
@@ -150,63 +124,15 @@ def create_openai_client() -> Optional[object]:
         return None
 
 
-def get_llm_client() -> tuple[Optional[object], str]:
-    """
-    Get the best available LLM client based on provider priority.
-    
-    This is the main function that should be used throughout the codebase
-    to get an LLM client. It automatically selects the best available provider.
-    
-    Returns:
-        tuple[Optional[object], str]: (client, provider_name) or (None, "none")
-    """
-    provider = get_preferred_provider()
-    
-    if provider == AIProvider.ANTHROPIC:
-        client = create_anthropic_client()
-        if client is not None:
-            return client, AIProvider.ANTHROPIC
-        
-        # Fallback to OpenAI if Anthropic fails
-        logger.warning("Anthropic client failed, falling back to OpenAI")
-        provider = AIProvider.OPENAI
-    
-    if provider == AIProvider.OPENAI:
-        client = create_openai_client()
-        if client is not None:
-            return client, AIProvider.OPENAI
-    
-    logger.warning("No LLM providers available")
-    return None, AIProvider.NONE
-
-
-def get_model_name(provider: str) -> str:
-    """
-    Get the appropriate model name for the given provider.
-    
-    Args:
-        provider (str): Provider name (anthropic, openai, or none)
-        
-    Returns:
-        str: Model name for the provider
-    """
-    if provider == AIProvider.ANTHROPIC:
-        return os.getenv("ANTHROPIC_MODEL", "claude-3-5-sonnet-20241022")
-    elif provider == AIProvider.OPENAI:
-        return os.getenv("OPENAI_MODEL", "gpt-4o-mini")
-    else:
-        return "none"
-
-
 def make_llm_request(
     messages: list,
     max_tokens: int = 200,
-    temperature: float = 0.1,
     system_message: Optional[str] = None,
     max_retries: int = 3,
     base_delay: float = 1.0,
     max_delay: float = 60.0,
-    backoff_factor: float = 2.0
+    backoff_factor: float = 2.0,
+    config: LLMConfig = None
 ) -> Optional[str]:
     """
     Make a request to the LLM using the best available provider with exponential backoff.
@@ -228,35 +154,35 @@ def make_llm_request(
     Returns:
         Optional[str]: LLM response content or None if all attempts failed
     """
-    client, provider = get_llm_client()
+    client = get_client(config)
     
     if client is None:
         logger.error("No LLM client available for request")
         return None
     
-    model = get_model_name(provider)
+    model = config.model
     last_exception = None
     
     for attempt in range(max_retries + 1):  # +1 for initial attempt
         try:
-            if provider == AIProvider.ANTHROPIC:
+            if config.provider == "anthropic":
                 return _make_anthropic_request(
-                    client, messages, max_tokens, temperature, system_message, model
+                    client, messages, max_tokens, system_message, config
                 )
-            elif provider == AIProvider.OPENAI:
+            elif config.provider == "openai":
                 return _make_openai_request(
-                    client, messages, max_tokens, temperature, system_message, model
+                    client, messages, max_tokens, system_message, config
                 )
             else:
-                logger.error(f"Unsupported provider: {provider}")
+                logger.error(f"Unsupported provider: {config.provider}")
                 return None
                 
         except Exception as e:
             last_exception = e
             
             # Check if this is a retryable error
-            if not _is_retryable_error(e, provider):
-                logger.error(f"Non-retryable error with {provider}: {e}")
+            if not _is_retryable_error(e, config.provider):
+                logger.error(f"Non-retryable error with {config.provider}: {e}")
                 return None
             
             if attempt < max_retries:
@@ -267,19 +193,19 @@ def make_llm_request(
                 
                 logger.warning(
                     f"LLM request failed (attempt {attempt + 1}/{max_retries + 1}) "
-                    f"with {provider}: {e}. Retrying in {total_delay:.2f}s"
+                    f"with {config.provider}: {e}. Retrying in {total_delay:.2f}s"
                 )
                 time.sleep(total_delay)
             else:
                 logger.error(
-                    f"All retry attempts exhausted for {provider}. "
+                    f"All retry attempts exhausted for {config.provider}. "
                     f"Final error: {last_exception}"
                 )
     
     return None
 
 
-def _is_retryable_error(error: Exception, provider: str) -> bool:
+def _is_retryable_error(error: Exception, config: LLMConfig) -> bool:
     """
     Determine if an error is retryable based on the error type and provider.
     
@@ -309,11 +235,11 @@ def _is_retryable_error(error: Exception, provider: str) -> bool:
             return True
     
     # Provider-specific error handling
-    if provider == AIProvider.ANTHROPIC:
+    if config.provider == "anthropic":
         # Anthropic-specific retryable errors
         if "anthropic" in error_str and any(x in error_str for x in ["overloaded", "busy"]):
             return True
-    elif provider == AIProvider.OPENAI:
+    elif config.provider == "openai":
         # OpenAI-specific retryable errors
         if hasattr(error, 'status_code'):
             # OpenAI client typically raises errors with status codes
@@ -337,9 +263,8 @@ def _make_anthropic_request(
     client: object,
     messages: list,
     max_tokens: int,
-    temperature: float,
     system_message: Optional[str],
-    model: str
+    config: LLMConfig
 ) -> Optional[str]:
     """Make a request to Anthropic's API."""
     try:
@@ -350,9 +275,9 @@ def _make_anthropic_request(
                 formatted_messages.append(msg)
         
         kwargs = {
-            "model": model,
+            "model": config.model,
             "max_tokens": max_tokens,
-            "temperature": temperature,
+            "temperature": float(config.temperature),
             "messages": formatted_messages
         }
         
@@ -371,9 +296,8 @@ def _make_openai_request(
     client: object,
     messages: list,
     max_tokens: int,
-    temperature: float,
     system_message: Optional[str],
-    model: str
+    config: LLMConfig
 ) -> Optional[str]:
     """Make a request to OpenAI's API."""
     try:
@@ -386,10 +310,10 @@ def _make_openai_request(
         formatted_messages.extend(messages)
         
         response = client.chat.completions.create(
-            model=model,
+            model=config.model,
             messages=formatted_messages,
             max_tokens=max_tokens,
-            temperature=temperature
+            temperature=float(config.temperature)
         )
         
         return response.choices[0].message.content
@@ -406,15 +330,18 @@ def get_ai_status() -> Dict[str, Any]:
     Returns:
         Dict[str, Any]: Status information including availability and configuration
     """
-    available = get_available_providers()
-    preferred = get_preferred_provider()
-    
     status = {
-        "providers": available,
-        "preferred_provider": preferred,
-        "models": {
-            "anthropic": get_model_name(AIProvider.ANTHROPIC),
-            "openai": get_model_name(AIProvider.OPENAI)
+        "providers": {
+            "anthropic": _anthropic_available,
+            "openai": _openai_available
+        },
+        "codegen_model": {
+            "provider": os.getenv("CODEGEN_LLM_PROVIDER"),
+            "model": os.getenv("CODEGEN_LLM")
+        },
+        "text_clean_model": {
+            "provider": os.getenv("TEXT_CLEAN_LLM_PROVIDER"),
+            "model": os.getenv("TEXT_CLEAN_LLM")
         },
         "packages_installed": {
             "anthropic": _anthropic_available,
@@ -427,25 +354,3 @@ def get_ai_status() -> Dict[str, Any]:
     }
     
     return status
-
-
-# Backward compatibility functions for existing code
-def get_openai_client() -> Optional[object]:
-    """
-    Backward compatibility function for existing OpenAI-specific code.
-    
-    Returns:
-        Optional[object]: OpenAI client or None
-    """
-    return create_openai_client()
-
-
-def get_default_model() -> str:
-    """
-    Get the default model for the preferred provider.
-    
-    Returns:
-        str: Default model name
-    """
-    provider = get_preferred_provider()
-    return get_model_name(provider) 

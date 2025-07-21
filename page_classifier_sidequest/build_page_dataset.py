@@ -5,6 +5,8 @@ The jsons should go in page_classifier_sidequest/page_dataset/
 """
 import json
 import os
+import re
+from typing import Tuple
 from pathlib import Path
 import statistics
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -12,7 +14,33 @@ import pdfplumber
 import sys
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from virtual_literature_companion.processors.pdf2txt import extract_page_text, categorize_page, PageType, calculate_word_stats
+from virtual_literature_companion.processors.page_extraction import extract_single_page_text
+from virtual_literature_companion.processors.process_novel_text import categorize_page, PageType
+
+
+def calculate_word_stats(text: str) -> Tuple[int, float]:
+    """
+    Calculate word count and word diversity for text analysis.
+    
+    Args:
+        text (str): The text to analyze
+        
+    Returns:
+        Tuple[int, float]: (word_count, word_diversity_ratio)
+            word_diversity_ratio is unique_words / total_words
+    """
+    # Clean and split text into words
+    words = re.findall(r'\b\w+\b', text.lower())
+    word_count = len(words)
+    
+    if word_count == 0:
+        return 0, 0.0
+    
+    # Calculate diversity as ratio of unique words to total words
+    unique_words = len(set(words))
+    diversity_ratio = unique_words / word_count
+    
+    return word_count, diversity_ratio
 
 def build_dataset(book_pdfs_dir: str = 'book_pdfs', output_dir: str = 'page_classifier_sidequest/page_dataset'):
     book_pdfs_dir = Path(book_pdfs_dir)
@@ -27,7 +55,7 @@ def build_dataset(book_pdfs_dir: str = 'book_pdfs', output_dir: str = 'page_clas
             total_pages = len(pdf.pages)
         page_texts = {}
         with ThreadPoolExecutor() as executor:
-            futures = {executor.submit(extract_page_text, str(pdf_path), i): i for i in range(total_pages)}
+            futures = {executor.submit(extract_single_page_text, str(pdf_path), i): i for i in range(total_pages)}
             for future in as_completed(futures):
                 page_num, text = future.result()
                 page_texts[page_num] = text
