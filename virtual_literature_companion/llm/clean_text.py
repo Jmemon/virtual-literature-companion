@@ -7,7 +7,7 @@ from virtual_literature_companion.config import TEXT_CLEAN_LLM_CONFIG
 from .request import make_llm_request
 
 
-def clean_text(
+async def clean_text(
     raw_text: str,
     max_tokens: Optional[int] = None,
 ) -> Optional[str]:
@@ -35,9 +35,10 @@ Follow these rules:
 2.  **Correct OCR Errors:** Fix common OCR mistakes, such as `hew as` to `he was`, `s coundrel` to `scoundrel`, or `oflf` to `off`.
 3.  **Preserve Formatting:** Keep original formatting like italics or bold text, often marked with `*` or `_`.
 4.  **Do Not Add New Content:** Do not add any words or sentences that were not in the original text. Your job is to clean, not to create.
-5.  **Fix Spacing and Line Breaks:** Correct spacing issues between words and ensure paragraphs are separated by a single newline.
+5. **Do Not Remove Content:** Do not remove any content from the original text. Even if at the end the text cuts off in the middle of a sentence, keep it, as I am giving you a page of text, and the rest is likely on the next page.
+6.  **Fix Spacing and Line Breaks:** Correct spacing issues between words and ensure paragraphs are separated by a single newline.
 
-The raw text will be in <raw> tags. Output the cleaned text in <cleaned> tags.
+The raw text will be in <raw> tags. Output the cleaned text between <cleaned>...</cleaned> tags.
 """
     prompt = f"<raw>\n{raw_text}\n</raw>"
 
@@ -65,7 +66,7 @@ Why is the sky blue? It is not blue, that is just your imagination.
 </cleaned>"""},
         {"role": "user", "content": prompt}]
 
-    response_text = make_llm_request(
+    response_text = await make_llm_request(
         messages=messages,
         max_tokens=max_tokens,
         system_message=system_prompt,
@@ -80,9 +81,12 @@ Why is the sky blue? It is not blue, that is just your imagination.
             start_idx = response_text.find(start_tag) + len(start_tag)
             end_idx = response_text.find(end_tag)
             response_text = response_text[start_idx:end_idx].strip()
-        else:
-            # If tags are missing, return None to indicate failure
-            return None
+
+        elif "<cleaned>" in response_text:
+            start_tag = "<cleaned>"
+            start_idx = response_text.find(start_tag) + len(start_tag)
+            response_text = response_text[start_idx:].strip()
+
         return response_text
 
     return None 

@@ -1,4 +1,6 @@
 
+import asyncio
+
 from virtual_literature_companion.llm.clean_text import clean_text
 
 
@@ -30,7 +32,7 @@ EXAMPLES = [
 ]
 
 
-def main():
+async def main():
     """
     Runs the text cleaning evaluation script.
 
@@ -40,29 +42,40 @@ def main():
     any discrepancies to the console. This allows for qualitative assessment
     of the text cleaning model's performance on a variety of inputs.
     """
+    tasks = []
     for i, example in enumerate(EXAMPLES):
-        inp = example["inp"]
-        expected_out = example["expected_out"]
+        task = asyncio.create_task(process_example(i, example))
+        tasks.append(task)
 
-        actual_out = clean_text(inp)
+    await asyncio.gather(*tasks)
 
-        if not actual_out:
-            print(f"--- NO OUTPUT FOR EXAMPLE {i+1} ---")
-            print("--- INPUT ---")
-            print(inp)
-            print("\n" * 3)
-            continue
 
-        if actual_out.strip() != expected_out.strip():
-            print(f"--- MISMATCH ON EXAMPLE {i+1} ---")
-            print("--- INPUT ---")
-            print(inp)
-            print("\n--- EXPECTED ---")
-            print(expected_out)
-            print("\n--- ACTUAL ---")
-            print(actual_out)
-            print("\n" * 3)
+async def process_example(i: int, example: dict):
+    """
+    Processes a single example for text cleaning evaluation.
+    """
+    inp = example["inp"]
+    expected_out = example["expected_out"]
+
+    actual_out = await clean_text(inp)
+
+    if not actual_out:
+        print(f"--- NO OUTPUT FOR EXAMPLE {i+1} ---")
+        print("--- INPUT ---")
+        print(inp)
+        print("\n" * 3)
+        return
+
+    if actual_out.strip() != expected_out.strip():
+        print(f"--- MISMATCH ON EXAMPLE {i+1} ---")
+        print("--- INPUT ---")
+        print(inp)
+        print("\n--- EXPECTED ---")
+        print(expected_out)
+        print("\n--- ACTUAL ---")
+        print(actual_out)
+        print("\n" * 3)
 
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())

@@ -17,6 +17,7 @@ import logging
 import os
 import time
 import random
+import asyncio
 from typing import Optional, Dict, Any, Union
 from dotenv import load_dotenv
 
@@ -66,10 +67,10 @@ def get_client(config: LLMConfig) -> Optional[object]:
 
 def create_anthropic_client() -> Optional[object]:
     """
-    Create and return an Anthropic client.
+    Create and return an Anthropic async client.
     
     Returns:
-        Optional[anthropic.Anthropic]: Anthropic client or None if unavailable
+        Optional[anthropic.AsyncAnthropic]: Anthropic async client or None if unavailable
     """
     global _anthropic_client
     
@@ -86,7 +87,7 @@ def create_anthropic_client() -> Optional[object]:
         return None
     
     try:
-        _anthropic_client = anthropic.Anthropic(api_key=api_key)
+        _anthropic_client = anthropic.AsyncAnthropic(api_key=api_key)
         logger.info("Successfully initialized Anthropic client")
         return _anthropic_client
     except Exception as e:
@@ -96,10 +97,10 @@ def create_anthropic_client() -> Optional[object]:
 
 def create_openai_client() -> Optional[object]:
     """
-    Create and return an OpenAI client.
+    Create and return an OpenAI async client.
     
     Returns:
-        Optional[openai.OpenAI]: OpenAI client or None if unavailable
+        Optional[openai.AsyncOpenAI]: OpenAI async client or None if unavailable
     """
     global _openai_client
     
@@ -116,7 +117,7 @@ def create_openai_client() -> Optional[object]:
         return None
     
     try:
-        _openai_client = openai.OpenAI(api_key=api_key)
+        _openai_client = openai.AsyncOpenAI(api_key=api_key)
         logger.info("Successfully initialized OpenAI client")
         return _openai_client
     except Exception as e:
@@ -124,7 +125,7 @@ def create_openai_client() -> Optional[object]:
         return None
 
 
-def make_llm_request(
+async def make_llm_request(
     messages: list,
     max_tokens: int = 200,
     system_message: Optional[str] = None,
@@ -166,11 +167,11 @@ def make_llm_request(
     for attempt in range(max_retries + 1):  # +1 for initial attempt
         try:
             if config.provider == "anthropic":
-                return _make_anthropic_request(
+                return await _make_anthropic_request(
                     client, messages, max_tokens, system_message, config
                 )
             elif config.provider == "openai":
-                return _make_openai_request(
+                return await _make_openai_request(
                     client, messages, max_tokens, system_message, config
                 )
             else:
@@ -195,7 +196,7 @@ def make_llm_request(
                     f"LLM request failed (attempt {attempt + 1}/{max_retries + 1}) "
                     f"with {config.provider}: {e}. Retrying in {total_delay:.2f}s"
                 )
-                time.sleep(total_delay)
+                await asyncio.sleep(total_delay)
             else:
                 logger.error(
                     f"All retry attempts exhausted for {config.provider}. "
@@ -259,7 +260,7 @@ def _is_retryable_error(error: Exception, config: LLMConfig) -> bool:
     return True
 
 
-def _make_anthropic_request(
+async def _make_anthropic_request(
     client: object,
     messages: list,
     max_tokens: int,
@@ -284,7 +285,7 @@ def _make_anthropic_request(
         if system_message:
             kwargs["system"] = system_message
         
-        response = client.messages.create(**kwargs)
+        response = await client.messages.create(**kwargs)
         return response.content[0].text
         
     except Exception as e:
@@ -292,7 +293,7 @@ def _make_anthropic_request(
         return None
 
 
-def _make_openai_request(
+async def _make_openai_request(
     client: object,
     messages: list,
     max_tokens: int,
@@ -309,7 +310,7 @@ def _make_openai_request(
         
         formatted_messages.extend(messages)
         
-        response = client.chat.completions.create(
+        response = await client.chat.completions.create(
             model=config.model,
             messages=formatted_messages,
             max_tokens=max_tokens,
