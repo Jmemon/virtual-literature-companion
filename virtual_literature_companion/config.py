@@ -11,11 +11,11 @@ class LLMConfig:
 CODEGEN_LLM_CONFIG = LLMConfig(
     provider=os.getenv("CODEGEN_LLM_PROVIDER"),
     model=os.getenv("CODEGEN_LLM"),
-    temperature=os.getenv("CODEGEN_LLM_TEMPERATURE")
+    temperature=float(os.getenv("CODEGEN_LLM_TEMPERATURE"))
 )
 
 TEXT_CLEAN_LLM_CONFIG = LLMConfig(
     provider=os.getenv("TEXT_CLEAN_LLM_PROVIDER"),
     model=os.getenv("TEXT_CLEAN_LLM"),
-    temperature=os.getenv("TEXT_CLEAN_LLM_TEMPERATURE")
+    temperature=float(os.getenv("TEXT_CLEAN_LLM_TEMPERATURE"))
 )

@@ -16,7 +16,7 @@ import datetime
 from collections import Counter, defaultdict
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-from virtual_literature_companion.llm.general import make_llm_request
+from virtual_literature_companion.llm.request import make_llm_request_async
 from virtual_literature_companion.processors.process_novel_text import PageType
 
 dataset_dir = Path('page_classifier_sidequest/page_dataset')
@@ -34,12 +34,12 @@ def load_labeled_data():
                 all_pages.append(page)
     return all_pages
 
-def generate_classifier_code(prompt):
+async def generate_classifier_code(prompt):
     messages = [{'role': 'user', 'content': prompt}]
-    response = make_llm_request(messages, max_tokens=2000, temperature=0.7)
+    response = await make_llm_request_async(messages, max_tokens=2000, temperature=0.7)
     return response.strip()
 
-def test_classifier(code, pages, mean_words, std_words):
+async def test_classifier(code, pages, mean_words, std_words):
     # Write code to file
     with open(classifier_file, 'w') as f:
         f.write(code)
@@ -87,7 +87,7 @@ def test_classifier(code, pages, mean_words, std_words):
             metrics[c] = {'precision': prec, 'recall': recall, 'f1': f1, 'count': count}
     return accuracy, failures, metrics, None
 
-def main():
+async def main():
     data = load_labeled_data()
     if not data:
         print('No labeled data found.')
@@ -161,7 +161,7 @@ Examples:
 {examples}
 
 Output the python code in <python>...</python> tags. Make sure you include all necessary imports, check for syntax errors, and any other problems. This code should be ready to run. Describe the logic of your solution and why you think it will work in a few sentences, placed in <description>...</description> tags."""
-    output = generate_classifier_code(prompt)
+    output = await generate_classifier_code(prompt)
     code = output.split('<python>')[1].split('</python>')[0].strip()
     description = output.split('<description>')[1].split('</description>')[0].strip()
 
@@ -173,7 +173,7 @@ Output the python code in <python>...</python> tags. Make sure you include all n
     max_iterations = 10
     target_accuracy = 0.95
     while iteration < max_iterations:
-        accuracy, failures, metrics, error = test_classifier(code, test_pages, mean_words, std_words)
+        accuracy, failures, metrics, error = await test_classifier(code, test_pages, mean_words, std_words)
         if error is not None:
             print(f'Error in classifier: {error}')
             prompt = f"""The classifier code had an error: {error}.

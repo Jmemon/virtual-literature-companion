@@ -13,6 +13,8 @@ wheels/
 
 .DS_Store
 
+out.log
+
 book_pdfs
 books
 

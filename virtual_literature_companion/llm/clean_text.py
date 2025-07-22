@@ -16,7 +16,7 @@ Follow these rules:
 - **Do Not Add New Content:** Do not add any words or sentences that were not in the original text. Your job is to clean, not to create. Content modification should be in the form of corrections, as well as removing headers/footers.
 - **Fix Spacing and Line Breaks:** Correct spacing issues between words and ensure paragraphs are separated by a single newline. Do not get rid of newlines.
 
-The raw text will be in <RAW> tags. Output the cleaned text between <CLEANED> tags. Include closing tag: </CLEANED>.
+The raw text will be in `<RAW>` tags. Output the cleaned text between `<CLEANED>` tags. Include closing tag: `</CLEANED>`.
 """
 
 example_messages = [
@@ -24,12 +24,12 @@ example_messages = [
 81 Hamlet ACT 2. SC. 2
 FTLN 1046 And leads the will to desperate undertakings
 FTLN 1047 As oft as any passions under heaven
-FTLN 1048 That does afflict our natures. I am sorry.
+FTLN 1048 That does afflict our natures. I am
 </RAW>"""},
     {"role": "assistant", "content": """<CLEANED>
 And leads the will to desperate undertakings
 As oft as any passions under heaven
-That does afflict our natures. I am sorry.
+That does afflict our natures. I am
 </CLEANED>"""},
     {"role": "user", "content": """<RAW>
 Page 4
@@ -46,8 +46,7 @@ of tenremarkedthateachbookwas likeatlm3
 capsule, off3ringglimps3s intothethougYts and
 beliefs ofp30ple froml0ng-forgott3n 3ras. Som3tim3s she
 wouldflnd ancl3nt m4nuscripts w1th illuminat3d l3tt3rs that
-gl0w3d lik3g3ms inth3 dim
-llbr ary llght.
+gl0w3d lik3g3ms inth3
 </RAW>"""},
     {"role": "assistant", "content": """<CLEANED>
 The ancient library contained thousands of
@@ -63,8 +62,7 @@ often remarked that each book was like a time
 capsule, offering glimpses into the thoughts and
 beliefs of people from long-forgotten eras. Sometimes she
 would find ancient manuscripts with illuminated letters that
-glowed like gems in the dim
-library light.
+glowed like gems in the
 </CLEANED>"""},
 ]
 
@@ -92,7 +90,7 @@ def clean_text(
     if not raw_text.strip():
         return raw_text
 
-    prompt = f"<raw>\n{raw_text}\n</raw>"
+    prompt = f"<RAW>\n{raw_text}\n</RAW>"
 
     if max_tokens is None:
         # Estimate max tokens based on input length plus a buffer.
@@ -115,17 +113,15 @@ def clean_text(
 
     if response_text:
         # Extract the cleaned text from between <cleaned> tags
-        if "<cleaned>" in response_text and "</cleaned>" in response_text:
-            start_tag = "<cleaned>"
-            end_tag = "</cleaned>"
+        if "<CLEANED>" in response_text and "</CLEANED>" in response_text:
+            start_tag = "<CLEANED>"
+            end_tag = "</CLEANED>"
             start_idx = response_text.find(start_tag) + len(start_tag)
             end_idx = response_text.find(end_tag)
             response_text = response_text[start_idx:end_idx].strip()
 
-        elif "<cleaned>" in response_text:
-            start_tag = "<cleaned>"
-            start_idx = response_text.find(start_tag) + len(start_tag)
-            response_text = response_text[start_idx:].strip()
+        else:
+            raise ValueError(f"Both <CLEANED> and </CLEANED> tags must be present in the response.")
 
         return response_text
 
@@ -155,7 +151,7 @@ async def clean_text_async(
     if not raw_text.strip():
         return raw_text
 
-    prompt = f"<raw>\n{raw_text}\n</raw>"
+    prompt = f"<RAW>\n{raw_text}\n</RAW>"
 
     if max_tokens is None:
         # Estimate max tokens based on input length plus a buffer.
@@ -183,10 +179,8 @@ async def clean_text_async(
             end_idx = response_text.find(end_tag)
             response_text = response_text[start_idx:end_idx].strip()
 
-        elif "<CLEANED>" in response_text:
-            start_tag = "<CLEANED>"
-            start_idx = response_text.find(start_tag) + len(start_tag)
-            response_text = response_text[start_idx:].strip()
+        else:
+            raise ValueError(f"Both <CLEANED> and </CLEANED> tags must be present in the response.")
 
         return response_text
 

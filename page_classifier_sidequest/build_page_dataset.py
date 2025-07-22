@@ -17,7 +17,7 @@ import asyncio
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from virtual_literature_companion.processors.page_extraction import extract_single_page_text
-from virtual_literature_companion.processors.process_novel_text import categorize_page, PageType
+from virtual_literature_companion.processors.process_novel_text import categorize_page
 from virtual_literature_companion.llm.clean_text import clean_text_async
 
 
@@ -111,15 +111,23 @@ async def update_datasets_clean_text(
                 page_texts[page_num] = text
 
         dataset = []
-        batch_size = 5
         sorted_pages_nums = sorted(page_texts.keys())
+        batch_size = 20
         pbar = tqdm(total=len(sorted_pages_nums), desc=f'Cleaning {novel_name}')
 
         for i in range(0, len(sorted_pages_nums), batch_size):
             batch_page_nums = sorted_pages_nums[i:i+batch_size]
-            async with asyncio.TaskGroup() as tg:  # waits for all tasks to complete before continuing
-                tasks = [tg.create_task(clean_text_async(page_texts[pn])) for pn in batch_page_nums]
-            cleaned_texts_batch = [task.result() for task in tasks]
+            
+            tasks = [clean_text_async(page_texts[pn], max_tokens=30_000) for pn in batch_page_nums]
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+
+            cleaned_texts_batch = []
+            for page_num, result in zip(batch_page_nums, results):
+                if isinstance(result, Exception) or result is None:
+                    cleaned_texts_batch.append(f"{page_texts[page_num]}")
+                    print(f"ERROR: {result}")
+                else:
+                    cleaned_texts_batch.append(result)
 
             pre_update_len = len(dataset)
             for page_num, cleaned_text in zip(batch_page_nums, cleaned_texts_batch):

@@ -278,7 +278,7 @@ def create_openrouter_client_async() -> Optional[object]:
 
 def make_llm_request(
     messages: list,
-    max_tokens: int = 200,
+    max_tokens: Optional[int] = None,
     system_message: Optional[str] = None,
     max_retries: int = 3,
     base_delay: float = 1.0,
@@ -321,11 +321,7 @@ def make_llm_request(
                 return _make_anthropic_request(
                     client, messages, max_tokens, system_message, config
                 )
-            elif config.provider == Providers.OPENAI:
-                return _make_openai_request(
-                    client, messages, max_tokens, system_message, config
-                )
-            elif config.provider == Providers.OPENROUTER:
+            elif config.provider in [Providers.OPENAI, Providers.OPENROUTER]:
                 return _make_openai_request(
                     client, messages, max_tokens, system_message, config
                 )
@@ -363,7 +359,7 @@ def make_llm_request(
 
 async def make_llm_request_async(
     messages: list,
-    max_tokens: int = 200,
+    max_tokens: Optional[int] = None,
     system_message: Optional[str] = None,
     max_retries: int = 3,
     base_delay: float = 1.0,
@@ -405,11 +401,7 @@ async def make_llm_request_async(
                 return await _make_anthropic_request_async(
                     client, messages, max_tokens, system_message, config
                 )
-            elif config.provider == Providers.OPENAI:
-                return await _make_openai_request_async(
-                    client, messages, max_tokens, system_message, config
-                )
-            elif config.provider == Providers.OPENROUTER:
+            elif config.provider in [Providers.OPENAI, Providers.OPENROUTER]:
                 return await _make_openai_request_async(
                     client, messages, max_tokens, system_message, config
                 )
@@ -475,11 +467,11 @@ def _is_retryable_error(error: Exception, config: LLMConfig) -> bool:
             return True
     
     # Provider-specific error handling
-    if config.provider == "anthropic":
+    if config.provider == Providers.ANTHROPIC:
         # Anthropic-specific retryable errors
         if "anthropic" in error_str and any(x in error_str for x in ["overloaded", "busy"]):
             return True
-    elif config.provider == "openai":
+    elif config.provider in [Providers.OPENAI, Providers.OPENROUTER]:
         # OpenAI-specific retryable errors
         if hasattr(error, 'status_code'):
             # OpenAI client typically raises errors with status codes
@@ -502,7 +494,7 @@ def _is_retryable_error(error: Exception, config: LLMConfig) -> bool:
 def _make_anthropic_request(
     client: object,
     messages: list,
-    max_tokens: int,
+    max_tokens: Optional[int],
     system_message: Optional[str],
     config: LLMConfig
 ) -> Optional[str]:
@@ -535,7 +527,7 @@ def _make_anthropic_request(
 async def _make_anthropic_request_async(
     client: object,
     messages: list,
-    max_tokens: int,
+    max_tokens: Optional[int],
     system_message: Optional[str],
     config: LLMConfig
 ) -> Optional[str]:
@@ -568,7 +560,7 @@ async def _make_anthropic_request_async(
 def _make_openai_request(
     client: object,
     messages: list,
-    max_tokens: int,
+    max_tokens: Optional[int],
     system_message: Optional[str],
     config: LLMConfig
 ) -> Optional[str]:
@@ -599,7 +591,7 @@ def _make_openai_request(
 async def _make_openai_request_async(
     client: object,
     messages: list,
-    max_tokens: int,
+    max_tokens: Optional[int],
     system_message: Optional[str],
     config: LLMConfig
 ) -> Optional[str]:
@@ -617,7 +609,7 @@ async def _make_openai_request_async(
             model=config.model,
             messages=formatted_messages,
             max_tokens=max_tokens,
-            temperature=float(config.temperature)
+            temperature=config.temperature
         )
         
         return response.choices[0].message.content
