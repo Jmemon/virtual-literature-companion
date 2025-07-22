@@ -14,7 +14,7 @@ The module handles:
 """
 
 import logging
-import enum
+from enum import Enum
 import os
 import time
 import random
@@ -36,9 +36,11 @@ _anthropic_available = False
 _openai_available = False
 _anthropic_client = None
 _openai_client = None
+_openrouter_client = None
 
 _anthropic_async_client = None
 _openai_async_client = None
+_openrouter_async_client = None
 
 try:
     import anthropic
@@ -53,7 +55,7 @@ except ImportError:
     logger.warning("OpenAI package not available. Install with: pip install openai")
 
 
-class Providers(enum.Enum):
+class Providers(str, Enum):
     ANTHROPIC = "anthropic"
     OPENAI = "openai"
     OPENROUTER = "openrouter"

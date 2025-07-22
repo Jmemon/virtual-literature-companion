@@ -10,34 +10,62 @@ from .request import make_llm_request, make_llm_request_async
 system_prompt = """You are an expert in cleaning OCR text from books. Your task is to correct errors, remove extraneous elements, and format the text properly, while preserving the original content and structure.
 
 Follow these rules:
-1.  **Remove Headers and Footers:** Delete any page numbers, book titles, or chapter titles that appear at the top or bottom of the page.
-2.  **Correct OCR Errors:** Fix common OCR mistakes, such as `hew as` to `he was`, `s coundrel` to `scoundrel`, or `oflf` to `off`.
-3.  **Preserve Formatting:** Keep original formatting like italics or bold text, often marked with `*` or `_`.
-4.  **Do Not Add New Content:** Do not add any words or sentences that were not in the original text. Your job is to clean, not to create.
-5. **Do Not Remove Content:** Do not remove any content from the original text. Even if at the end the text cuts off in the middle of a sentence, keep it, as I am giving you a page of text, and the rest is likely on the next page.
-6.  **Fix Spacing and Line Breaks:** Correct spacing issues between words and ensure paragraphs are separated by a single newline.
+- **Remove Headers and Footers:** Delete any page numbers, book titles, or chapter titles that appear at the top or bottom of the page.
+- **Correct OCR Errors:** Fix common OCR mistakes, such as `hew as` to `he was`, `s coundrel` to `scoundrel`, or `oflf` to `off`.
+- **Preserve Formatting:** Keep original formatting like italics or bold text, often marked with `*` or `_`.
+- **Do Not Add New Content:** Do not add any words or sentences that were not in the original text. Your job is to clean, not to create. Content modification should be in the form of corrections, as well as removing headers/footers.
+- **Fix Spacing and Line Breaks:** Correct spacing issues between words and ensure paragraphs are separated by a single newline. Do not get rid of newlines.
 
-The raw text will be in <raw> tags. Output the cleaned text between <cleaned>...</cleaned> tags.
+The raw text will be in <RAW> tags. Output the cleaned text between <CLEANED> tags. Include closing tag: </CLEANED>.
 """
 
 example_messages = [
-    {"role": "user", "content": """<raw>
+    {"role": "user", "content": """<RAW>
 81 Hamlet ACT 2. SC. 2
 FTLN 1046 And leads the will to desperate undertakings
 FTLN 1047 As oft as any passions under heaven
 FTLN 1048 That does afflict our natures. I am sorry.
-</raw>"""},
-    {"role": "assistant", "content": """<cleaned>
+</RAW>"""},
+    {"role": "assistant", "content": """<CLEANED>
 And leads the will to desperate undertakings
 As oft as any passions under heaven
 That does afflict our natures. I am sorry.
-</cleaned>"""},
-    {"role": "user", "content": """<raw>
-Why isthe ksy blue? It is not blue, that isjustyour i m a g i n a t i o n.
-</raw>"""},
-    {"role": "assistant", "content": """<cleaned>
-Why is the sky blue? It is not blue, that is just your imagination.
-</cleaned>"""},
+</CLEANED>"""},
+    {"role": "user", "content": """<RAW>
+Page 4
+The anc ient libr ery contaned th0usands of
+bpoks that hadbeen carefullypreserv3d for centuri3s. Many
+of the volum3s werehandwritl
+en manuscripts frommed ieval tim3s, their pag3s
+yellowed withag3 but stilllegible to trained
+sch0lars. Theheadlibrarian, Dr.Elisabeth
+Hartwell, sp3nther daysc atal0guing these
+preciousl3xts andens uringtheir prop3r
+stor4ge inclimate-controlledenvironm3nts. She
+of tenremarkedthateachbookwas likeatlm3
+capsule, off3ringglimps3s intothethougYts and
+beliefs ofp30ple froml0ng-forgott3n 3ras. Som3tim3s she
+wouldflnd ancl3nt m4nuscripts w1th illuminat3d l3tt3rs that
+gl0w3d lik3g3ms inth3 dim
+llbr ary llght.
+</RAW>"""},
+    {"role": "assistant", "content": """<CLEANED>
+The ancient library contained thousands of
+books that had been carefully preserved for centuries. Many
+of the volumes were handwritten
+manuscripts from medieval times, their pages
+yellowed with age but still legible to trained
+scholars. The head librarian, Dr. Elisabeth
+Hartwell, spent her days cataloguing these
+precious texts and ensuring their proper
+storage in climate-controlled environments. She
+often remarked that each book was like a time
+capsule, offering glimpses into the thoughts and
+beliefs of people from long-forgotten eras. Sometimes she
+would find ancient manuscripts with illuminated letters that
+glowed like gems in the dim
+library light.
+</CLEANED>"""},
 ]
 
 
@@ -45,6 +73,7 @@ def clean_text(
     raw_text: str,
     max_tokens: Optional[int] = None,
     max_retries: int = 3,
+    full_response: bool = False,
 ) -> Optional[str]:
     """
     Clean OCR text using a specialized prompt via an LLM API.
@@ -81,6 +110,9 @@ def clean_text(
         config=TEXT_CLEAN_LLM_CONFIG
     )
 
+    if full_response:
+        return response_text
+
     if response_text:
         # Extract the cleaned text from between <cleaned> tags
         if "<cleaned>" in response_text and "</cleaned>" in response_text:
@@ -104,6 +136,7 @@ async def clean_text_async(
     raw_text: str,
     max_tokens: Optional[int] = None,
     max_retries: int = 3,
+    full_response: bool = False,
 ) -> Optional[str]:
     """
     Clean OCR text using a specialized prompt via an LLM API.
@@ -138,17 +171,20 @@ async def clean_text_async(
         config=TEXT_CLEAN_LLM_CONFIG
     )
 
+    if full_response:
+        return response_text
+
     if response_text:
         # Extract the cleaned text from between <cleaned> tags
-        if "<cleaned>" in response_text and "</cleaned>" in response_text:
-            start_tag = "<cleaned>"
-            end_tag = "</cleaned>"
+        if "<CLEANED>" in response_text and "</CLEANED>" in response_text:
+            start_tag = "<CLEANED>"
+            end_tag = "</CLEANED>"
             start_idx = response_text.find(start_tag) + len(start_tag)
             end_idx = response_text.find(end_tag)
             response_text = response_text[start_idx:end_idx].strip()
 
-        elif "<cleaned>" in response_text:
-            start_tag = "<cleaned>"
+        elif "<CLEANED>" in response_text:
+            start_tag = "<CLEANED>"
             start_idx = response_text.find(start_tag) + len(start_tag)
             response_text = response_text[start_idx:].strip()
 
