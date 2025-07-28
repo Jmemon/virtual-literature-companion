@@ -8,14 +8,17 @@ wheels/
 
 # Virtual environments
 .venv
+.pytest_cache
 
 .env
 
 .DS_Store
 
+.claude
+
 out.log
 
-book_pdfs
+book_source
 books
 
 specs

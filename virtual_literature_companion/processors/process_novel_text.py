@@ -21,21 +21,14 @@ logger = logging.getLogger(__name__)
 
 class PageType(Enum):
     """Enumeration of different page types found in books."""
+    BLANK = "blank"
     TITLE_PAGE = "title_page"
-    COPYRIGHT_PAGE = "copyright_page"
-    DEDICATION_PAGE = "dedication_page"
-    TABLE_OF_CONTENTS_PAGE = "table_of_contents_page"
-    FOREWORD_PREFACE_START = "foreword_preface_start"
-    ACKNOWLEDGEMENTS_START = "acknowledgements_start"
-    INTRODUCTION_START = "introduction_start"
-    CHAPTER_START = "chapter_start"
-    PART_START = "part_start"
+    TABLE_OF_CONTENTS = "table_of_contents"
+    COPYWRIGHT_PAGE = "copyright_page"
+    STORY_BREAK = "story_break"
+    FRONT_MATTER_BREAK = "front_matter_break"
+    BACK_MATTER_BREAK = "back_matter_break"
     CONTENT = "content"
-    APPENDIX_START = "appendix_start"
-    GLOSSARY_START = "glossary_start"
-    BIBLIOGRAPHY_PAGE = "bibliography_page"
-    INDEX_PAGE = "index_page"
-    THROWAWAY = "throwaway"
 
 
 def calculate_word_stats(text: str) -> Tuple[int, float]:

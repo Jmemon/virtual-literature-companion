@@ -22,7 +22,8 @@ import traceback
 from typing import Dict, Any, Optional, List
 
 from .constants import DEBUG_MODE, BOOKS_DIR
-from .processors.page_extraction import extract_page_text, validate_pdf_file
+from .processors.page_extraction import extract_page_text as extract_pdf_text, validate_pdf_file
+from .processors.epub_extraction import extract_page_text as extract_epub_text, validate_epub_file
 from .processors.page_cleaning import clean_pages_async
 from .processors.process_novel_text import process_extracted_pages
 from .processors.novel_text_to_json import process_chapters_to_structured
@@ -37,18 +38,18 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-async def ingest_book_pdf_async(
-    pdf_path: str, 
+async def ingest_book_async(
+    book_fpath: str, 
     novel_name: str, 
     author_name: str,
     skip_existing: bool = False,
     clean_on_error: bool = True
 ) -> Dict[str, Any]:
     """
-    Complete end-to-end ingestion of a PDF book into the Virtual Literature Companion system.
+    Complete end-to-end ingestion of a PDF or EPUB book into the Virtual Literature Companion system.
     
     This function orchestrates the entire book processing pipeline, handling:
-    - PDF validation and text extraction
+    - PDF/EPUB validation and text extraction
     - Chapter detection and text structuring
     - Literary analysis with character and setting identification
     - Metadata generation including author biography
@@ -66,7 +67,7 @@ async def ingest_book_pdf_async(
     7. Validate and test the created indexes
     
     Args:
-        pdf_path (str): Path to the PDF file to process
+        book_fpath (str): Path to the PDF or EPUB file to process
         novel_name (str): Name of the novel (used for organizing output)
         author_name (str): Name of the author (used for metadata lookup)
         skip_existing (bool): If True, skip processing if output already exists
@@ -83,22 +84,22 @@ async def ingest_book_pdf_async(
             - error_details: Error information if status is "error"
             
     Raises:
-        FileNotFoundError: If the PDF file doesn't exist
+        FileNotFoundError: If the PDF/EPUB file doesn't exist
         ValueError: If input parameters are invalid
         Exception: For unexpected processing errors
     """
     logger.info(f"Starting book ingestion for '{novel_name}' by {author_name}")
-    logger.info(f"PDF source: {pdf_path}")
+    logger.info(f"Book source: {book_fpath}")
 
     novel_name = novel_name.lower().replace(" ", "_")
     author_name = author_name.lower().replace(" ", "_")
     
     # Validate inputs
-    validation_result = _validate_inputs(pdf_path, novel_name, author_name)
+    validation_result = _validate_inputs(book_fpath, novel_name, author_name)
     if validation_result["status"] == "error":
         return validation_result
     
-    pdf_path = Path(pdf_path)
+    book_path = Path(book_fpath)
     book_dir = BOOKS_DIR / novel_name
     
     # Check if processing should be skipped
@@ -118,29 +119,38 @@ async def ingest_book_pdf_async(
     artifacts_manager = NovelArtifactsManager(novel_name)
     
     try:
-        # Step 1: PDF extraction and cleaning
+        # Step 1: Book extraction and cleaning
         logger.info("=" * 60)
-        logger.info("STEP 1: PDF extraction and cleaning")
+        logger.info("STEP 1: Book extraction and cleaning")
         logger.info("=" * 60)
         
-        progress.start_step("pdf_extraction")
+        progress.start_step("book_extraction")
         
-        if not validate_pdf_file(str(pdf_path)):
-            raise ValueError(f"Invalid or corrupted PDF file: {pdf_path}")
-        
-        page_texts, total_pages = extract_page_text(str(pdf_path))
+        # Determine file type and extract accordingly
+        file_extension = book_path.suffix.lower()
+        if file_extension == '.pdf':
+            if not validate_pdf_file(str(book_path)):
+                raise ValueError(f"Invalid or corrupted PDF file: {book_path}")
+            page_texts, total_pages = extract_pdf_text(str(book_path))
+        elif file_extension == '.epub':
+            if not validate_epub_file(str(book_path)):
+                raise ValueError(f"Invalid or corrupted EPUB file: {book_path}")
+            page_texts, total_pages = extract_epub_text(str(book_path))
+        else:
+            raise ValueError(f"Unsupported file type: {file_extension}. Only PDF and EPUB files are supported.")
         
         if not page_texts:
-            raise ValueError("No text could be extracted from the PDF")
+            raise ValueError(f"No text could be extracted from the {file_extension.upper()} file")
         
         cleaned_page_texts = await clean_pages_async(page_texts)
         
-        progress.complete_step("pdf_extraction", {
+        progress.complete_step("book_extraction", {
             "pages_extracted": len(cleaned_page_texts),
-            "total_characters": sum(len(text) for text in cleaned_page_texts.values())
+            "total_characters": sum(len(text) for text in cleaned_page_texts.values()),
+            "file_type": file_extension.upper()
         })
         
-        logger.info(f"✓ PDF extraction and cleaning complete: {len(cleaned_page_texts)} pages")
+        logger.info(f"✓ {file_extension.upper()} extraction and cleaning complete: {len(cleaned_page_texts)} pages")
         
         # Step 2: Page processing and raw text creation
         front_matter, back_matter, chapter_texts = process_extracted_pages(cleaned_page_texts, novel_name, total_pages)
@@ -208,7 +218,8 @@ async def ingest_book_pdf_async(
             "statistics": {
                 "chapters": len(chapter_data),
                 "paragraphs": indexing_result["statistics"]["total_paragraphs"],
-                "total_characters": progress.get_step_data("pdf_extraction").get("total_characters", 0),
+                "total_characters": progress.get_step_data("book_extraction").get("total_characters", 0),
+                "file_type": progress.get_step_data("book_extraction").get("file_type", "UNKNOWN"),
                 "indexes_created": len(indexing_result["indexes_created"])
             },
             "output_files": {
@@ -265,36 +276,38 @@ async def ingest_book_pdf_async(
         return error_result
 
 
-def _validate_inputs(pdf_path: str, novel_name: str, author_name: str) -> Dict[str, Any]:
+def _validate_inputs(book_fpath: str, novel_name: str, author_name: str) -> Dict[str, Any]:
     """
     Validate the input parameters for book ingestion.
     
     Args:
-        pdf_path (str): Path to the PDF file
+        book_fpath (str): Path to the PDF or EPUB file
         novel_name (str): Name of the novel
         author_name (str): Name of the author
         
     Returns:
         Dict[str, Any]: Validation result
     """
-    # Check PDF file exists
-    pdf_file = Path(pdf_path)
-    if not pdf_file.exists():
+    # Check book file exists
+    book_file = Path(book_fpath)
+    if not book_file.exists():
         return {
             "status": "error",
-            "message": f"PDF file not found: {pdf_path}"
+            "message": f"Book file not found: {book_fpath}"
         }
     
-    if not pdf_file.is_file():
+    if not book_file.is_file():
         return {
             "status": "error",
-            "message": f"Path is not a file: {pdf_path}"
+            "message": f"Path is not a file: {book_fpath}"
         }
     
-    if pdf_file.suffix.lower() != '.pdf':
+    # Check if file is PDF or EPUB
+    file_extension = book_file.suffix.lower()
+    if file_extension not in ['.pdf', '.epub']:
         return {
             "status": "error",
-            "message": f"File is not a PDF: {pdf_path}"
+            "message": f"Unsupported file type: {file_extension}. Only PDF and EPUB files are supported."
         }
     
     # Validate novel name
