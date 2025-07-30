@@ -13,7 +13,7 @@ Each processor is designed to be modular and can be used independently
 or as part of the complete ingestion pipeline.
 """
 
-from .page_extraction import extract_page_text, validate_pdf_file
+from .pdf_extraction import extract_page_text, validate_pdf_file
 from .page_cleaning import clean_pages_async
 from .process_novel_text import process_extracted_pages
 from .novel_text_to_json import process_chapters_to_structured

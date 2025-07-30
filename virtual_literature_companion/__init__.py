@@ -38,13 +38,13 @@ __author__ = "Virtual Literature Companion Team"
 __email__ = "contact@vlc.com"
 
 # Import main functions for easy access
-from .ingest import ingest_book_pdf_async, list_ingested_books
+from .ingest import list_ingested_books, ingest_book_async
 from .constants import BOOKS_DIR, SRC_DIR, REPO_DIR
 from .llm.request import get_ai_status, make_llm_request
 
 # Export key functions and constants
 __all__ = [
-    'ingest_book_pdf_async',
+    'ingest_book_async',
     'list_ingested_books',
     'BOOKS_DIR',
     'SRC_DIR',

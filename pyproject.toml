@@ -28,6 +28,7 @@ dependencies = [
     "torch>=2.7.1",
     "tqdm>=4.67.1",
     "transformers[torch]>=4.53.1",
+    "watchdog>=6.0.0",
 ]
 
 [project.scripts]

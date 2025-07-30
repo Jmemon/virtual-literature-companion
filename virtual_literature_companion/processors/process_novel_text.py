@@ -13,22 +13,11 @@ from pathlib import Path
 from typing import Dict, List, Tuple
 
 from ..constants import BOOKS_DIR, DEBUG_MODE
+from ..types import PageType
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-
-
-class PageType(Enum):
-    """Enumeration of different page types found in books."""
-    BLANK = "blank"
-    TITLE_PAGE = "title_page"
-    TABLE_OF_CONTENTS = "table_of_contents"
-    COPYWRIGHT_PAGE = "copyright_page"
-    STORY_BREAK = "story_break"
-    FRONT_MATTER_BREAK = "front_matter_break"
-    BACK_MATTER_BREAK = "back_matter_break"
-    CONTENT = "content"
 
 
 def calculate_word_stats(text: str) -> Tuple[int, float]:
@@ -98,13 +87,13 @@ def categorize_page(text: str, page_num: int, total_pages: int, mean_words: floa
                 logger.debug(f"Page {page_num + 1}: Categorized as COPYRIGHT_PAGE - "
                              f"word_count={word_count} (mean={mean_words:.1f}, std={std_words:.1f}), "
                              f"word_diversity={word_diversity:.3f}")
-            return PageType.COPYRIGHT_PAGE
+            return PageType.COPYWRIGHT_PAGE
         
         # Dedication page patterns
         # Enhanced: Require very low density
         if (is_very_low_density and len(text_lines) <= 8 and word_count < 80 and word_diversity < 0.9 and
             any(phrase in text_lower for phrase in ['dedicated to', 'for ', 'in memory of', 'to my'])):
-            return PageType.DEDICATION_PAGE
+            return PageType.FRONT_MATTER_BREAK
         
         # Table of contents patterns
         # Enhanced: Require low density (TOC is sparse)
@@ -112,25 +101,25 @@ def categorize_page(text: str, page_num: int, total_pages: int, mean_words: floa
             (any(word in text_lower for word in ['contents', 'table of contents']) or
              (len(text_lines) > 5 and 
               any(re.search(r'\d+$', line) for line in text_lines[-5:])))):  # Page numbers at end of lines
-            return PageType.TABLE_OF_CONTENTS_PAGE
+            return PageType.TABLE_OF_CONTENTS
         
         # Foreword/Preface patterns
         # Enhanced: Require medium density, not too low or high
         if (is_medium_density and word_count < 800 and
             any(word in text_lower for word in ['foreword', 'preface', 'prologue'])):
-            return PageType.FOREWORD_PREFACE_START
+            return PageType.FRONT_MATTER_BREAK
         
         # Acknowledgements patterns
         # Enhanced: Require low to medium density
         if ((is_low_density or is_medium_density) and word_count < 600 and
             any(word in text_lower for word in ['acknowledgment', 'acknowledgement', 'thanks', 'grateful'])):
-            return PageType.ACKNOWLEDGEMENTS_START
+            return PageType.FRONT_MATTER_BREAK
         
         # Introduction patterns
         # Enhanced: Allow medium to high density but not excessive
         if (not is_very_low_density and word_count < 1000 and
             any(word in text_lower for word in ['introduction', 'overview'])):
-            return PageType.INTRODUCTION_START
+            return PageType.FRONT_MATTER_BREAK
     
     # Late pages (last 20% of book) - back matter
     elif page_num > total_pages * 0.8:
@@ -138,19 +127,19 @@ def categorize_page(text: str, page_num: int, total_pages: int, mean_words: floa
         # Enhanced: Allow medium to high density
         if (not is_low_density and word_count < 1200 and
             any(word in text_lower for word in ['appendix', 'supplementary'])):
-            return PageType.APPENDIX_START
+            return PageType.BACK_MATTER_BREAK
         
         # Glossary patterns
         # Enhanced: Require low density due to list format
         if (is_low_density and word_diversity < 0.6 and
             any(word in text_lower for word in ['glossary', 'definitions', 'terms'])):
-            return PageType.GLOSSARY_START
+            return PageType.BACK_MATTER_BREAK
         
         # Bibliography patterns
         # Enhanced: Require low density
         if (is_low_density and word_diversity < 0.5 and
             any(word in text_lower for word in ['bibliography', 'references', 'works cited', 'sources'])):
-            return PageType.BIBLIOGRAPHY_PAGE
+            return PageType.BACK_MATTER_BREAK
         
         # Index patterns
         # Enhanced: Require very low density (highly structured)
@@ -158,7 +147,7 @@ def categorize_page(text: str, page_num: int, total_pages: int, mean_words: floa
             (any(word in text_lower for word in ['index']) or
              (len(text_lines) > 10 and 
               sum(1 for line in text_lines if re.search(r'\d+(-\d+)?$', line)) > len(text_lines) * 0.3))):
-            return PageType.INDEX_PAGE
+            return PageType.BACK_MATTER_BREAK
     
     # Chapter start patterns (can occur anywhere in main content)
     chapter_patterns = [
@@ -174,11 +163,11 @@ def categorize_page(text: str, page_num: int, total_pages: int, mean_words: floa
                     logger.debug(f"Page {page_num + 1}: Categorized as CHAPTER_START - "
                                  f"word_count={word_count} (mean={mean_words:.1f}, std={std_words:.1f}), "
                                  f"word_diversity={word_diversity:.3f}, matched_line='{line[:50]}...'")
-                return PageType.CHAPTER_START
+                return PageType.STORY_BREAK
     
     # Part start patterns
     if any(re.match(r'(?i)^part\s+(?:d+|[ivx]+)', line) for line in text_lines[:3]):
-        return PageType.PART_START
+        return PageType.STORY_BREAK
     
     # Default to content if none of the above patterns match
     # Enhanced: Only if not low density (content should be substantial)

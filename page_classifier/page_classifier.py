@@ -18,9 +18,11 @@ from collections import Counter, defaultdict
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from virtual_literature_companion.llm.request import make_llm_request_async
 from virtual_literature_companion.processors.process_novel_text import PageType
+from page_classifier.constants import PAGE_DATASET_DIR, PAGE_CLASSIFIER_DIR
 
-dataset_dir = Path('page_classifier_sidequest/page_dataset')
-classifier_file = Path('page_classifier_sidequest/generated_classifier.py')
+
+dataset_dir = PAGE_DATASET_DIR
+classifier_file = PAGE_CLASSIFIER_DIR / 'generated_classifier.py'
 
 classifier_fn_signature = "def classify_page(text: str, page_num: int, total_pages: int, mean_words: float, std_words: float) -> str" 
 
@@ -104,7 +106,7 @@ async def main():
 
     # Create a timestamped directory to save iterations of generated classifiers
     timestamp = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    gen_dir = Path('page_classifier_sidequest/generated_classifiers') / timestamp
+    gen_dir = PAGE_CLASSIFIER_DIR / 'generated_classifiers' / timestamp
     gen_dir.mkdir(parents=True, exist_ok=True)
 
     best_score = -1
@@ -230,7 +232,7 @@ Output the improved python code in <python>...</python> tags. Make sure you incl
         with open(iter_file, 'w') as f:
             f.write(code)
         iteration += 1
-    with open('page_classifier_sidequest/final_classifier.py', 'w') as f:
+    with open(PAGE_CLASSIFIER_DIR / 'final_classifier.py', 'w') as f:
         f.write(best_code)
     print('Final classifier saved. Best score:', best_score)
 

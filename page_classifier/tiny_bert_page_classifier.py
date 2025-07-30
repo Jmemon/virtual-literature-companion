@@ -66,7 +66,7 @@ Custom configuration:
 
 Command line usage:
     ```bash
-    python page_classifier_sidequest/neural_page_classifier.py
+    python page_classifier/neural_page_classifier.py
     ```
 
 Input/Output:
@@ -121,6 +121,8 @@ from transformers import (
 )
 from torch.nn import CrossEntropyLoss
 
+from page_classifier.constants import PAGE_DATASET_DIR
+
 # Setup logging
 logging.basicConfig(
     level=logging.INFO,
@@ -162,8 +164,8 @@ class PageClassifierConfig:
     rare_label_threshold: int = 3
     
     # Paths
-    dataset_path: Path = field(default_factory=lambda: Path("page_classifier_sidequest/page_dataset"))
-    output_dir: Path = field(default_factory=lambda: Path("page_classifier_sidequest/generated_classifiers/tinybert_page_classifier"))
+    dataset_path: Path = field(default_factory=lambda: PAGE_DATASET_DIR)
+    output_dir: Path = field(default_factory=lambda: PAGE_DATASET_DIR / "generated_classifiers" / "tinybert_page_classifier")
     
     # Reproducibility
     seed: int = 42

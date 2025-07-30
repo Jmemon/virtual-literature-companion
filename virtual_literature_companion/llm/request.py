@@ -577,7 +577,7 @@ def _make_openai_request(
         response = client.chat.completions.create(
             model=config.model,
             messages=formatted_messages,
-            max_tokens=max_tokens,
+            #max_tokens=max_tokens,
             temperature=float(config.temperature)
         )
         
@@ -608,7 +608,7 @@ async def _make_openai_request_async(
         response = await client.chat.completions.create(
             model=config.model,
             messages=formatted_messages,
-            max_tokens=max_tokens,
+            #max_tokens=max_tokens,
             temperature=config.temperature
         )
         

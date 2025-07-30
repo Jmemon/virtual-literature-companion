@@ -22,7 +22,7 @@ import traceback
 from typing import Dict, Any, Optional, List
 
 from .constants import DEBUG_MODE, BOOKS_DIR
-from .processors.page_extraction import extract_page_text as extract_pdf_text, validate_pdf_file
+from .processors.pdf_extraction import extract_page_text as extract_pdf_text, validate_pdf_file
 from .processors.epub_extraction import extract_page_text as extract_epub_text, validate_epub_file
 from .processors.page_cleaning import clean_pages_async
 from .processors.process_novel_text import process_extracted_pages
