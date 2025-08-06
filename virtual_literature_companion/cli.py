@@ -20,10 +20,13 @@ import logging
 import sys
 from pathlib import Path
 from typing import Dict, Any, List, Optional
+from datetime import datetime
 
 from .constants import DEBUG_MODE, BOOKS_DIR
 from .ingest import load_ingest_file
 from .llm.request import get_ai_status
+from .types import Book
+from .utils import save_ingested_book, list_ingested_books
 
 # Configure logging for CLI
 logging.basicConfig(
@@ -120,20 +123,18 @@ def ingest(
         # Process the file using the new ingest system
         sections = load_ingest_file(file_path_obj)
         
-        # Create a simple result structure for now
-        result = {
-            'status': 'success',
-            'novel_name': novel_name,
-            'author_name': author_name,
-            'sections': sections,
-            'statistics': {
-                'sections': len(sections),
-                'total_characters': sum(len(s.get('clean_text', '')) for s in sections)
-            }
-        }
+        # Create Book instance
+        book = Book(
+            title=novel_name,
+            author_name=author_name,
+            sections=sections
+        )
+        
+        # Save the processed data as JSON in the books directory
+        save_ingested_book(book)
         
         # Display results
-        _display_success_result(result, ctx.obj['quiet'])
+        _display_success_result(book, ctx.obj['quiet'])
             
     except KeyboardInterrupt:
         click.echo("\n❌ Processing interrupted by user", err=True)
@@ -377,26 +378,21 @@ def remove(ctx: click.Context, novel_name: str):
 
 # Helper functions for display formatting
 
-def _display_success_result(result: Dict[str, Any], quiet: bool) -> None:
+def _display_success_result(book: Book, quiet: bool) -> None:
     """Display successful ingestion results."""
     if quiet:
         return
     
     click.echo("\n✅ Book ingestion completed successfully!")
-    click.echo(f"📚 Title: {result['novel_name']}")
-    click.echo(f"👤 Author: {result['author_name']}")
+    click.echo(f"📚 Title: {book.title}")
+    click.echo(f"👤 Author: {book.author_name}")
     
-    stats = result.get('statistics', {})
     click.echo(f"📊 Statistics:")
-    click.echo(f"  📖 Chapters: {stats.get('chapters', 0)}")
-    click.echo(f"  📝 Paragraphs: {stats.get('paragraphs', 0)}")
-    click.echo(f"  📄 Characters: {stats.get('total_characters', 0):,}")
-    click.echo(f"  🔍 Indexes: {stats.get('indexes_created', 0)}")
-    click.echo(f"  ⏱️  Processing time: {result.get('processing_time', 0):.2f} seconds")
-    
-    click.echo(f"\n📁 Output files:")
-    for name, path in result.get('output_files', {}).items():
-        click.echo(f"  {name}: {path}")
+    click.echo(f"  📖 Chapters: {book.statistics.total_chapters}")
+    click.echo(f"  📝 Paragraphs: {book.statistics.total_paragraphs}")
+    click.echo(f"  📄 Characters: {book.statistics.total_characters:,}")
+    click.echo(f"  📑 Sections: {book.statistics.total_sections}")
+    click.echo(f"  📝 Words: {book.statistics.total_word_count:,}")
 
 
 def _display_error_result(result: Dict[str, Any], debug: bool) -> None:
