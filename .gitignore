@@ -25,3 +25,5 @@ specs
 
 page_classifier/page_dataset/
 page_classifier/generated_classifiers/
+
+vector_indexes/

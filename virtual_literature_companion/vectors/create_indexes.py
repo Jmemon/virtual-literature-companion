@@ -45,7 +45,8 @@ class IndexCreator:
         self._initialize_client()
         try:
             collection = self.chroma_client.get_collection(collection_name)
-        except ValueError:
+        except Exception:
+            # Collection doesn't exist, create it
             collection = self.chroma_client.create_collection(collection_name)
         return collection
     
