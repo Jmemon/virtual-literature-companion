@@ -26,3 +26,4 @@ class SectionType(str, Enum):
     DEDICATION = 'dedication'
     CHAPTER = 'chapter'
     COPYRIGHT_PAGE = 'copyright_page'
+    OTHER = 'other'

@@ -18,13 +18,12 @@ import click
 import json
 import logging
 import sys
-import asyncio
 from pathlib import Path
 from typing import Dict, Any, List, Optional
 
 from .constants import DEBUG_MODE, BOOKS_DIR
-from .ingest import ingest_book_pdf_async, list_ingested_books
-from .llm.general import get_ai_status
+from .ingest import load_ingest_file
+from .llm.request import get_ai_status
 
 # Configure logging for CLI
 logging.basicConfig(
@@ -40,14 +39,13 @@ logger = logging.getLogger(__name__)
 @click.pass_context
 def cli(ctx: click.Context, debug: bool, quiet: bool):
     """
-    Virtual Literature Companion - Advanced PDF book processing and analysis system.
+    Virtual Literature Companion - Advanced book processing and analysis system.
     
-    This tool processes PDF books into structured, searchable formats with:
-    - Multi-threaded PDF text extraction (text + OCR)
-    - Chapter detection and text structuring
-    - Character and setting analysis using AI
-    - Vector embeddings for semantic search
-    - Comprehensive metadata generation
+    This tool processes books into structured, searchable formats with:
+    - EPUB text extraction and section classification
+    - Text cleaning using AI models
+    - Section type detection (chapters, TOC, etc.)
+    - Extensible architecture for multiple file formats
     
     Use 'vlc COMMAND --help' for detailed command information.
     """
@@ -67,81 +65,75 @@ def cli(ctx: click.Context, debug: bool, quiet: bool):
         ai_status = get_ai_status()
         click.echo(f"Debug mode enabled")
         click.echo(f"Books directory: {BOOKS_DIR}")
-        click.echo(f"AI provider: {ai_status['preferred_provider']}")
+        available_providers = [p for p, available in ai_status.get("providers", {}).items() if available]
+        click.echo(f"Available AI providers: {', '.join(available_providers) if available_providers else 'none'}")
 
 
 @cli.command()
-@click.argument('pdf_path', type=click.Path(exists=True, readable=True))
+@click.argument('file_path', type=click.Path(exists=True, readable=True))
 @click.option('--novel-name', '-n', required=True, help='Name of the novel')
 @click.option('--author-name', '-a', required=True, help='Name of the author')
-@click.option('--skip-existing', is_flag=True, help='Skip processing if book already exists')
-@click.option('--no-cleanup', is_flag=True, help='Don\'t clean up partial results on error')
-@click.option('--embedding-model', default='all-MiniLM-L6-v2', help='Embedding model to use')
 @click.pass_context
 def ingest(
     ctx: click.Context,
-    pdf_path: str,
+    file_path: str,
     novel_name: str,
-    author_name: str,
-    skip_existing: bool,
-    no_cleanup: bool,
-    embedding_model: str
+    author_name: str
 ):
     """
-    Ingest a PDF book into the Virtual Literature Companion system.
+    Ingest a book file into the Virtual Literature Companion system.
     
-    This command processes a PDF book through the complete pipeline:
+    This command processes book files through the complete pipeline:
     
     \b
-    1. PDF text extraction (with OCR fallback)
-    2. Chapter detection and structuring
-    3. Paragraph-level literary analysis
-    4. Author biography and metadata lookup
-    5. Vector embedding creation for search
+    1. File validation and format detection
+    2. Section extraction and classification
+    3. Text cleaning using AI models
+    4. Structured data generation
     
-    The process is robust with error handling, progress tracking, and
-    automatic cleanup of partial results on failure.
+    Currently supports:
+    - EPUB files (.epub)
     
     Example:
-        vlc ingest book.pdf --novel-name "Pride and Prejudice" --author-name "Jane Austen"
+        vlc ingest book.epub --novel-name "Pride and Prejudice" --author-name "Jane Austen"
     """
     if not ctx.obj['quiet']:
         click.echo(f"🔶 Virtual Literature Companion - Book Ingestion")
         click.echo(f"📚 Novel: {novel_name}")
         click.echo(f"👤 Author: {author_name}")
-        click.echo(f"📄 PDF: {pdf_path}")
+        click.echo(f"📄 File: {file_path}")
         click.echo("=" * 50)
     
     # Validate prerequisites
     ai_status = get_ai_status()
-    if ai_status["preferred_provider"] == "none":
-        click.echo("⚠️  Warning: No AI providers available. Literary analysis will be limited.", err=True)
+    providers_available = any(ai_status.get("providers", {}).values())
+    if not providers_available:
+        click.echo("⚠️  Warning: No AI providers available. Text cleaning will be limited.", err=True)
     
     # Start ingestion process
     try:
-        with click.progressbar(
-            length=100,
-            label='Processing book',
-            show_eta=True,
-            show_percent=True
-        ) as bar:
-            # This is a simplified progress bar - in a real implementation,
-            # you'd want to integrate with the ProcessingProgress class
-            result = asyncio.run(ingest_book_pdf_async(
-                pdf_path=pdf_path,
-                novel_name=novel_name,
-                author_name=author_name,
-                skip_existing=skip_existing,
-                clean_on_error=not no_cleanup
-            ))
-            bar.update(100)
+        # Convert file path to Path object
+        file_path_obj = Path(file_path)
         
-        # Handle results
-        if result['status'] == 'success':
-            _display_success_result(result, ctx.obj['quiet'])
-        else:
-            _display_error_result(result, ctx.obj['debug'])
-            sys.exit(1)
+        click.echo(f"🔶 Processing {file_path_obj.name}...")
+        
+        # Process the file using the new ingest system
+        sections = load_ingest_file(file_path_obj)
+        
+        # Create a simple result structure for now
+        result = {
+            'status': 'success',
+            'novel_name': novel_name,
+            'author_name': author_name,
+            'sections': sections,
+            'statistics': {
+                'sections': len(sections),
+                'total_characters': sum(len(s.get('clean_text', '')) for s in sections)
+            }
+        }
+        
+        # Display results
+        _display_success_result(result, ctx.obj['quiet'])
             
     except KeyboardInterrupt:
         click.echo("\n❌ Processing interrupted by user", err=True)
@@ -272,12 +264,14 @@ def status(ctx: click.Context):
         ai_status = get_ai_status()
         click.echo(f"📁 Books directory: {BOOKS_DIR}")
         click.echo(f"📊 Debug mode: {'Enabled' if DEBUG_MODE else 'Disabled'}")
-        click.echo(f"🤖 AI provider: {ai_status['preferred_provider']}")
+        available_providers = [p for p, available in ai_status.get("providers", {}).items() if available]
+        click.echo(f"🤖 Available AI providers: {', '.join(available_providers) if available_providers else 'none'}")
         
-        if ai_status['preferred_provider'] != 'none':
-            provider = ai_status['preferred_provider']
-            model = ai_status['models'][provider]
-            click.echo(f"🔤 AI model: {model}")
+        # Show model configurations if available
+        if ai_status.get("text_clean_model", {}).get("provider"):
+            provider = ai_status["text_clean_model"]["provider"]
+            model = ai_status["text_clean_model"]["model"]
+            click.echo(f"🔤 Text cleaning model: {model} ({provider})")
         
         # AI provider details
         click.echo(f"\n🔑 AI Configuration:")
