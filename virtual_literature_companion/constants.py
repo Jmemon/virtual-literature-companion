@@ -26,6 +26,10 @@ DEFAULT_EMBEDDING_MODEL = "all-MiniLM-L6-v2"
 DEFAULT_CHUNK_SIZE = 1000
 DEFAULT_CHUNK_OVERLAP = 200
 
+# Vector database configuration
+VECTOR_EMBEDDING_MODEL = "all-mpnet-base-v2"  # Optimized for literary analysis
+VECTOR_DB_PATH = REPO_DIR / "vector_indexes"
+
 # Logging configuration
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
 DEBUG_MODE = os.getenv("DEBUG_MODE", "false").lower() == "true"

@@ -22,11 +22,12 @@ from pathlib import Path
 from typing import Dict, Any, List, Optional
 from datetime import datetime
 
-from .constants import DEBUG_MODE, BOOKS_DIR
+from .constants import DEBUG_MODE, BOOKS_DIR, VECTOR_DB_PATH
 from .ingest import load_ingest_file
 from .llm.request import get_ai_status
 from .types import Book
 from .utils import save_ingested_book, list_ingested_books
+from .vectors.create_indexes import create_sentence_index, create_paragraph_index, create_generic_index
 
 # Configure logging for CLI
 logging.basicConfig(
@@ -118,20 +119,61 @@ def ingest(
         # Convert file path to Path object
         file_path_obj = Path(file_path)
         
-        click.echo(f"🔶 Processing {file_path_obj.name}...")
+        # Check if book already exists
+        existing_books = list_ingested_books()
+        existing_book = None
         
-        # Process the file using the new ingest system
-        sections = load_ingest_file(file_path_obj)
+        for book_data in existing_books:
+            if (book_data.get('title', '').lower() == novel_name.lower() and 
+                book_data.get('author_name', '').lower() == author_name.lower()):
+                existing_book = Book.from_dict(book_data)
+                break
         
-        # Create Book instance
-        book = Book(
-            title=novel_name,
-            author_name=author_name,
-            sections=sections
-        )
+        if existing_book:
+            if not ctx.obj['quiet']:
+                click.echo(f"📚 Book already exists: {novel_name} by {author_name}")
+                click.echo(f"🔶 Skipping ingestion, proceeding to index creation...")
+            book = existing_book
+        else:
+            click.echo(f"🔶 Processing {file_path_obj.name}...")
+            
+            # Process the file using the new ingest system
+            sections = load_ingest_file(file_path_obj)
+            
+            # Create Book instance
+            book = Book(
+                title=novel_name,
+                author_name=author_name,
+                sections=sections
+            )
+            
+            # Save the processed data as JSON in the books directory
+            save_ingested_book(book)
         
-        # Save the processed data as JSON in the books directory
-        save_ingested_book(book)
+        # Create vector indexes
+        if not ctx.obj['quiet']:
+            click.echo(f"🔍 Creating vector indexes...")
+        
+        try:
+            sentence_collection = create_sentence_index(book)
+            if not ctx.obj['quiet']:
+                click.echo(f"✅ Sentence index created: {sentence_collection}")
+        except Exception as e:
+            click.echo(f"⚠️  Warning: Could not create sentence index: {str(e)}", err=True)
+        
+        try:
+            paragraph_collection = create_paragraph_index(book)
+            if not ctx.obj['quiet']:
+                click.echo(f"✅ Paragraph index created: {paragraph_collection}")
+        except Exception as e:
+            click.echo(f"⚠️  Warning: Could not create paragraph index: {str(e)}", err=True)
+            
+        try:
+            generic_collection = create_generic_index(book)
+            if not ctx.obj['quiet']:
+                click.echo(f"✅ Generic index created: {generic_collection}")
+        except Exception as e:
+            click.echo(f"⚠️  Warning: Could not create generic index: {str(e)}", err=True)
         
         # Display results
         _display_success_result(book, ctx.obj['quiet'])
