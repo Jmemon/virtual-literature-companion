@@ -7,48 +7,29 @@ sentence transformers for embeddings.
 """
 
 from typing import List
-from pathlib import Path
 import uuid
 
-import chromadb
 from sentence_transformers import SentenceTransformer
 from tqdm import tqdm
 
 from ..types import Book
 from ..constants import VECTOR_EMBEDDING_MODEL, VECTOR_DB_PATH
 from .chunks import ChunkData, TextChunker
+from .utils import ChromaInterface
 
 
-class IndexCreator:
-    """Base class for creating vector indexes using ChromaDB."""
+class IndexCreator(ChromaInterface):
+    """Class for creating vector indexes using ChromaDB."""
     
     def __init__(self, db_path: str = str(VECTOR_DB_PATH), model_name: str = VECTOR_EMBEDDING_MODEL):
         """Initialize the index creator with embedding model and database path."""
-        self.db_path = Path(db_path)
-        self.model_name = model_name
-        self.embedding_model = None
-        self.chroma_client = None
+        super().__init__(db_path, model_name)
         
     def _initialize_model(self):
-        """Lazy initialization of the embedding model."""
+        """Lazy initialization of the embedding model with print statement."""
         if self.embedding_model is None:
             print(f"Loading embedding model: {self.model_name}")
             self.embedding_model = SentenceTransformer(self.model_name)
-    
-    def _initialize_client(self):
-        """Initialize ChromaDB client."""
-        if self.chroma_client is None:
-            self.chroma_client = chromadb.PersistentClient(path=str(self.db_path))
-    
-    def _create_collection(self, collection_name: str):
-        """Create or get ChromaDB collection."""
-        self._initialize_client()
-        try:
-            collection = self.chroma_client.get_collection(collection_name)
-        except Exception:
-            # Collection doesn't exist, create it
-            collection = self.chroma_client.create_collection(collection_name)
-        return collection
     
     def _embed_chunks(self, chunks: List[ChunkData]) -> List[List[float]]:
         """Generate embeddings for text chunks."""
